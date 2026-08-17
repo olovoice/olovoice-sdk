@@ -1,5 +1,5 @@
 [build-system]
-requires = ["hatchling==1.27.0"]
+requires = ["hatchling==1.32.0"]
 build-backend = "hatchling.build"
 
 [project]
@@ -41,7 +41,7 @@ dev = [
   "pytest>=7",
   "pytest-asyncio>=0.23",
 ]
-release = ["build==1.5.0", "hatchling==1.27.0", "twine==6.2.0"]
+release = ["build==1.5.0", "hatchling==1.32.0", "twine==6.2.0"]
 
 [tool.hatch.version]
 path = "olovoice/_client.py"
