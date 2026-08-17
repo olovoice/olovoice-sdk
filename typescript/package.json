@@ -51,6 +51,6 @@
   "devDependencies": {
     "@arethetypeswrong/cli": "0.18.5",
     "publint": "0.3.23",
-    "typescript": "5.9.3"
+    "typescript": "7.0.2"
   }
 }
