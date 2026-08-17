@@ -2,9 +2,14 @@
 
 ## Supported versions
 
-The SDKs are currently pre-release and are not yet supported for production
-use. After the first registry release, security fixes will target the latest
-published minor version.
+The SDKs are currently public beta releases. Until 1.0, security fixes target
+the latest published minor line; users should pin a tested version and upgrade
+promptly when a security release is published.
+
+| Version | Supported |
+| --- | --- |
+| `0.1.x` | Yes |
+| `< 0.1` | No |
 
 ## Reporting a vulnerability
 

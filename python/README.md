@@ -1,22 +1,15 @@
-# olovoice — Python SDK (pre-release)
+# OloVoice — Python SDK
 
-Typed synchronous and asynchronous clients for the [olovoice Public API](https://docs.olovoice.ai), built on `httpx` for Python 3.11+.
+Typed synchronous and asynchronous clients for the [OloVoice Public API](https://docs.olovoice.ai), built on `httpx` for Python 3.11+.
 
-> This package has not been published to or reserved on PyPI yet. Install it only from a trusted local checkout or an internally verified release artifact. Do not rely on `pip install olovoice` until an official release is announced.
-
-## Install from this checkout
-
-From the SDK repository root:
+## Install
 
 ```bash
-python -m pip install -e ./python
+python -m pip install olovoice==0.1.0
 ```
 
-Or, from this directory:
-
-```bash
-python -m pip install -e .
-```
+This SDK is a public beta. Interfaces may evolve before 1.0, so pin and test an
+exact SDK version for production use.
 
 Set the API key in your server environment:
 

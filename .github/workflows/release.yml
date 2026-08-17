@@ -1,0 +1,616 @@
+name: Publish SDKs
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  actions: read
+  checks: read
+  contents: read
+
+concurrency:
+  # Registry releases are serialized so npm's mutable `latest` tag cannot race.
+  # Operators must push only one release tag while another release is active.
+  group: olovoice-sdk-release
+  cancel-in-progress: false
+
+jobs:
+  preflight:
+    name: Release preflight
+    runs-on: ubuntu-24.04
+    outputs:
+      release_commit: ${{ steps.release.outputs.release_commit }}
+      release_tag: ${{ steps.release.outputs.release_tag }}
+      source_date_epoch: ${{ steps.release.outputs.source_date_epoch }}
+      version: ${{ steps.release.outputs.version }}
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Validate canonical tag, commit, and package versions
+        id: release
+        shell: bash
+        env:
+          RELEASE_TAG: ${{ github.ref_name }}
+        run: |
+          set -euo pipefail
+
+          test "${GITHUB_REPOSITORY}" = "olovoice/olovoice-sdk"
+          test "${GITHUB_EVENT_NAME}" = "push"
+          test "${GITHUB_REF_TYPE}" = "tag"
+          test "${GITHUB_REF}" = "refs/tags/${RELEASE_TAG}"
+          [[ "${RELEASE_TAG}" =~ ^v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$ ]]
+
+          git fetch --force --no-tags origin \
+            "+refs/heads/main:refs/remotes/origin/main" \
+            "+refs/tags/${RELEASE_TAG}:refs/tags/${RELEASE_TAG}"
+          release_commit="$(git rev-parse "${RELEASE_TAG}^{commit}")"
+          test "$(git rev-parse HEAD)" = "${release_commit}"
+          git merge-base --is-ancestor "${release_commit}" origin/main
+
+          version="${RELEASE_TAG#v}"
+          source_date_epoch="$(git show -s --format=%ct "${release_commit}")"
+          [[ "${source_date_epoch}" =~ ^[0-9]+$ ]]
+          python3 scripts/check_versions.py
+          package_version="$(python3 -c \
+            'import json; print(json.load(open("typescript/package.json"))["version"])')"
+          test "${version}" = "${package_version}"
+
+          echo "release_commit=${release_commit}" >> "${GITHUB_OUTPUT}"
+          echo "release_tag=${RELEASE_TAG}" >> "${GITHUB_OUTPUT}"
+          echo "source_date_epoch=${source_date_epoch}" >> "${GITHUB_OUTPUT}"
+          echo "version=${version}" >> "${GITHUB_OUTPUT}"
+      - name: Require the latest successful SDK CI push run for the release commit
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_COMMIT: ${{ steps.release.outputs.release_commit }}
+        run: |
+          set -euo pipefail
+
+          runs="$(gh api \
+            -H 'Accept: application/vnd.github+json' \
+            -H 'X-GitHub-Api-Version: 2022-11-28' \
+            "repos/${GITHUB_REPOSITORY}/actions/workflows/sdk-ci.yml/runs?event=push&branch=main&head_sha=${RELEASE_COMMIT}&per_page=100")"
+          latest_run="$(jq -ce --arg repository "${GITHUB_REPOSITORY}" \
+            --arg sha "${RELEASE_COMMIT}" \
+            '[.workflow_runs[] | select(
+              .event == "push" and
+              .head_branch == "main" and
+              .head_sha == $sha and
+              .head_repository.full_name == $repository and
+              .path == ".github/workflows/sdk-ci.yml"
+            )] | sort_by(.created_at, .id) | last // empty' <<< "${runs}")" || {
+              echo 'No SDK CI push run exists for the release commit on main.' >&2
+              exit 1
+            }
+          run_id="$(jq -er '.id' <<< "${latest_run}")"
+          run_attempt="$(jq -er '.run_attempt' <<< "${latest_run}")"
+          test "$(jq -r '.status' <<< "${latest_run}")" = 'completed'
+          test "$(jq -r '.conclusion' <<< "${latest_run}")" = 'success'
+
+          jobs="$(gh api --paginate \
+            -H 'Accept: application/vnd.github+json' \
+            -H 'X-GitHub-Api-Version: 2022-11-28' \
+            "repos/${GITHUB_REPOSITORY}/actions/runs/${run_id}/attempts/${run_attempt}/jobs?per_page=100" \
+            --jq '.jobs[]' | jq -sc '.')"
+          required_checks=(
+            'Public API contract'
+            'TypeScript / Node 22 / ubuntu-24.04'
+            'TypeScript / Node 22 / windows-2025'
+            'TypeScript / Node 24 / ubuntu-24.04'
+            'TypeScript / Node 24 / windows-2025'
+            'TypeScript package artifact'
+            'Python 3.11'
+            'Python 3.12'
+            'Python 3.13'
+            'Python 3.14'
+            'Python package artifact'
+          )
+
+          for check_name in "${required_checks[@]}"; do
+            if ! jq -e --arg name "${check_name}" \
+              '([.[] | select(.name == $name and .conclusion == "success")] | length) == 1' \
+              <<< "${jobs}" > /dev/null; then
+              echo "Required successful SDK CI job is missing or duplicated: ${check_name}" >&2
+              exit 1
+            fi
+          done
+          jq -e 'length > 0 and all(.[]; .conclusion == "success")' \
+            <<< "${jobs}" > /dev/null || {
+              echo 'The selected SDK CI run contains a non-successful job.' >&2
+              exit 1
+            }
+
+  build-npm:
+    name: Build npm release artifact
+    needs: preflight
+    runs-on: ubuntu-24.04
+    defaults:
+      run:
+        working-directory: typescript
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
+        with:
+          ref: ${{ needs.preflight.outputs.release_commit }}
+          persist-credentials: false
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6.5.0
+        with:
+          node-version: 24
+          package-manager-cache: false
+      - name: Install the reviewed npm CLI version
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm install --global --ignore-scripts npm@11.19.0
+          test "$(npm --version)" = "11.19.0"
+      - run: npm ci
+      - name: Audit locked npm dependencies
+        run: npm audit --audit-level=high
+      - name: Verify npm registry signatures and attestations
+        run: npm audit signatures
+      - name: Build and validate npm tarball
+        id: npm_artifact
+        shell: bash
+        env:
+          SOURCE_DATE_EPOCH: ${{ needs.preflight.outputs.source_date_epoch }}
+          VERSION: ${{ needs.preflight.outputs.version }}
+        run: |
+          set -euo pipefail
+
+          staging="${RUNNER_TEMP}/npm-release"
+          mkdir "${staging}"
+          npm pack --pack-destination "${staging}"
+          tarball="${staging}/olovoice-${VERSION}.tgz"
+          test -f "${tarball}"
+          node scripts/smoke-package.mjs "${tarball}"
+          npm run lint:package -- "${tarball}"
+          npm run audit:types -- "${tarball}"
+          node scripts/write-sha256-manifest.mjs "${tarball}"
+          test "$(find "${staging}" -maxdepth 1 -type f | wc -l | tr -d ' ')" = "2"
+          (
+            cd "${staging}"
+            sha256sum --check --strict SHA256SUMS
+          )
+          echo "tarball=${tarball}" >> "${GITHUB_OUTPUT}"
+          echo "manifest=${staging}/SHA256SUMS" >> "${GITHUB_OUTPUT}"
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: olovoice-npm-release
+          path: |
+            ${{ steps.npm_artifact.outputs.tarball }}
+            ${{ steps.npm_artifact.outputs.manifest }}
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 30
+
+  build-python:
+    name: Build PyPI release artifacts
+    needs: preflight
+    runs-on: ubuntu-24.04
+    defaults:
+      run:
+        working-directory: python
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
+        with:
+          ref: ${{ needs.preflight.outputs.release_commit }}
+          persist-credentials: false
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6.3.0
+        with:
+          python-version: '3.13'
+      - uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9 # v9.0.0
+        with:
+          version: '0.12.3'
+          enable-cache: false
+      - run: >-
+          uv sync --frozen --no-build --python "3.13"
+          --extra release --no-install-project
+      - name: Build and validate wheel and sdist
+        id: python_artifacts
+        shell: bash
+        env:
+          SOURCE_DATE_EPOCH: ${{ needs.preflight.outputs.source_date_epoch }}
+        run: |
+          set -euo pipefail
+
+          staging="${RUNNER_TEMP}/python-release"
+          uv run --frozen --no-sync python ../scripts/build_python_release.py \
+            --out-dir "${staging}"
+          wheel_name="$(awk '$2 ~ /\.whl$/ {print $2}' "${staging}/SHA256SUMS")"
+          sdist_name="$(awk '$2 ~ /\.tar\.gz$/ {print $2}' "${staging}/SHA256SUMS")"
+          test -n "${wheel_name}"
+          test -n "${sdist_name}"
+          test "$(wc -l < "${staging}/SHA256SUMS" | tr -d ' ')" = "2"
+          test "$(find "${staging}" -maxdepth 1 -type f | wc -l | tr -d ' ')" = "3"
+          (
+            cd "${staging}"
+            sha256sum --check --strict SHA256SUMS
+          )
+          echo "wheel=${staging}/${wheel_name}" >> "${GITHUB_OUTPUT}"
+          echo "sdist=${staging}/${sdist_name}" >> "${GITHUB_OUTPUT}"
+          echo "manifest=${staging}/SHA256SUMS" >> "${GITHUB_OUTPUT}"
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: olovoice-python-release
+          path: |
+            ${{ steps.python_artifacts.outputs.wheel }}
+            ${{ steps.python_artifacts.outputs.sdist }}
+            ${{ steps.python_artifacts.outputs.manifest }}
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 30
+
+  publish-npm:
+    name: Publish npm package
+    needs: [preflight, build-npm, build-python]
+    runs-on: ubuntu-24.04
+    environment: release
+    permissions:
+      actions: read
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
+        with:
+          ref: ${{ needs.preflight.outputs.release_commit }}
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6.5.0
+        with:
+          node-version: 24
+          package-manager-cache: false
+      - name: Install the reviewed npm CLI version
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm install --global --ignore-scripts npm@11.19.0
+          test "$(npm --version)" = "11.19.0"
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: olovoice-npm-release
+          path: release-artifacts/npm
+      - name: Verify downloaded npm artifact and unchanged tag
+        id: npm_artifact
+        shell: bash
+        env:
+          RELEASE_COMMIT: ${{ needs.preflight.outputs.release_commit }}
+          RELEASE_TAG: ${{ needs.preflight.outputs.release_tag }}
+          VERSION: ${{ needs.preflight.outputs.version }}
+        run: |
+          set -euo pipefail
+
+          git fetch --force --no-tags origin \
+            "+refs/tags/${RELEASE_TAG}:refs/tags/${RELEASE_TAG}"
+          test "$(git rev-parse "${RELEASE_TAG}^{commit}")" = "${RELEASE_COMMIT}"
+
+          staging="${GITHUB_WORKSPACE}/release-artifacts/npm"
+          tarball="${staging}/olovoice-${VERSION}.tgz"
+          manifest="${staging}/SHA256SUMS"
+          test -f "${tarball}"
+          test -f "${manifest}"
+          test "$(find "${staging}" -maxdepth 1 -type f | wc -l | tr -d ' ')" = "2"
+          read -r digest filename extra < "${manifest}"
+          [[ "${digest}" =~ ^[0-9a-f]{64}$ ]]
+          test "${filename}" = "olovoice-${VERSION}.tgz"
+          test -z "${extra:-}"
+          test "$(wc -l < "${manifest}" | tr -d ' ')" = "1"
+          (
+            cd "${staging}"
+            sha256sum --check --strict SHA256SUMS
+          )
+          echo "tarball=${tarball}" >> "${GITHUB_OUTPUT}"
+          echo "sha256=${digest}" >> "${GITHUB_OUTPUT}"
+      - name: Determine npm publish or exact-match recovery
+        id: npm_state
+        shell: bash
+        env:
+          EXPECTED_SHA256: ${{ steps.npm_artifact.outputs.sha256 }}
+          GH_TOKEN: ${{ github.token }}
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_BOOTSTRAP_TOKEN }}
+          VERSION: ${{ needs.preflight.outputs.version }}
+        run: |
+          set -euo pipefail
+
+          require_previous_successful_publish() {
+            local attempt jobs
+            (( GITHUB_RUN_ATTEMPT > 1 )) || return 1
+            for ((attempt = 1; attempt < GITHUB_RUN_ATTEMPT; attempt++)); do
+              jobs="$(gh api --paginate \
+                -H 'Accept: application/vnd.github+json' \
+                -H 'X-GitHub-Api-Version: 2022-11-28' \
+                "repos/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}/attempts/${attempt}/jobs?per_page=100" \
+                --jq '.jobs[]' | jq -sc '.')"
+              if jq -e \
+                'any(.[];
+                  .name == "Publish npm package" and
+                  any(.steps[]; .name == "Publish npm package with provenance" and .conclusion == "success")
+                )' <<< "${jobs}" > /dev/null; then
+                return 0
+              fi
+            done
+            return 1
+          }
+
+          project_status="$(curl --silent --show-error --retry 3 --retry-all-errors \
+            --connect-timeout 10 --max-time 30 --output "${RUNNER_TEMP}/npm-project.json" \
+            --write-out '%{http_code}' "https://registry.npmjs.org/olovoice")"
+          version_status="$(curl --silent --show-error --retry 3 --retry-all-errors \
+            --connect-timeout 10 --max-time 30 --output "${RUNNER_TEMP}/npm-version.json" \
+            --write-out '%{http_code}' \
+            "https://registry.npmjs.org/olovoice/${VERSION}")"
+
+          [[ "${project_status}" = "200" || "${project_status}" = "404" ]] || {
+            echo "npm project lookup returned HTTP ${project_status}." >&2
+            exit 1
+          }
+
+          if [[ "${version_status}" = "404" ]]; then
+            if [[ "${project_status}" = "404" ]]; then
+              test "${VERSION}" = '0.1.0' || {
+                echo 'Only v0.1.0 may create the npm package; later tags must use trusted publishing.' >&2
+                exit 1
+              }
+              if [[ -z "${NODE_AUTH_TOKEN:-}" ]]; then
+                echo 'The first npm publish requires the protected NPM_BOOTSTRAP_TOKEN secret.' >&2
+                exit 1
+              fi
+            fi
+            if [[ "${project_status}" = "200" && -n "${NODE_AUTH_TOKEN:-}" ]]; then
+              echo 'NPM_BOOTSTRAP_TOKEN must be removed after the first package release.' >&2
+              exit 1
+            fi
+            echo 'should_publish=true' >> "${GITHUB_OUTPUT}"
+          elif [[ "${version_status}" = "200" ]]; then
+            if [[ -n "${NODE_AUTH_TOKEN:-}" ]]; then
+              echo 'NPM_BOOTSTRAP_TOKEN must be removed before npm recovery can continue.' >&2
+              exit 1
+            fi
+            expected_url="https://registry.npmjs.org/olovoice/-/olovoice-${VERSION}.tgz"
+            published_url="$(jq -er '.dist.tarball' "${RUNNER_TEMP}/npm-version.json")"
+            test "${published_url}" = "${expected_url}"
+            published_tarball="${RUNNER_TEMP}/published-olovoice-${VERSION}.tgz"
+            curl --fail --silent --show-error --retry 3 --retry-all-errors \
+              --proto '=https' --tlsv1.2 --connect-timeout 10 --max-time 60 \
+              --output "${published_tarball}" "${published_url}"
+            published_sha256="$(sha256sum "${published_tarball}" | awk '{print $1}')"
+            test "${published_sha256}" = "${EXPECTED_SHA256}" || {
+              echo 'Published npm artifact differs from this release build; refusing recovery.' >&2
+              exit 1
+            }
+            require_previous_successful_publish || {
+              echo 'Existing npm version was not published by a successful prior attempt of this release run.' >&2
+              exit 1
+            }
+            echo 'Exact npm artifact was published by this release run; continuing recovery.'
+            echo 'should_publish=false' >> "${GITHUB_OUTPUT}"
+          else
+            echo "npm version lookup returned HTTP ${version_status}." >&2
+            exit 1
+          fi
+      - name: Verify protected npm release approval
+        if: steps.npm_state.outputs.should_publish == 'true'
+        shell: bash
+        working-directory: typescript
+        env:
+          OLOVOICE_PUBLISH_APPROVAL: ${{ vars.OLOVOICE_PUBLISH_APPROVAL }}
+        run: npm run prepublishOnly
+      - name: Configure optional one-time npm bootstrap credential
+        if: steps.npm_state.outputs.should_publish == 'true'
+        id: npm_auth
+        shell: bash
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_BOOTSTRAP_TOKEN }}
+          NPM_CONFIG_USERCONFIG: ${{ runner.temp }}/olovoice-npmrc
+        run: |
+          set -euo pipefail
+          umask 077
+          : > "${NPM_CONFIG_USERCONFIG}"
+          if [[ -n "${NODE_AUTH_TOKEN:-}" ]]; then
+            printf '%s\n' '//registry.npmjs.org/:_authToken=${NODE_AUTH_TOKEN}' \
+              > "${NPM_CONFIG_USERCONFIG}"
+            echo 'mode=bootstrap-token' >> "${GITHUB_OUTPUT}"
+          else
+            echo 'mode=trusted-publishing' >> "${GITHUB_OUTPUT}"
+          fi
+      - name: Publish npm package with provenance
+        if: steps.npm_state.outputs.should_publish == 'true'
+        shell: bash
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_BOOTSTRAP_TOKEN }}
+          NPM_CONFIG_USERCONFIG: ${{ runner.temp }}/olovoice-npmrc
+          OLOVOICE_PUBLISH_APPROVAL: ${{ vars.OLOVOICE_PUBLISH_APPROVAL }}
+        run: >-
+          npm publish "${{ steps.npm_artifact.outputs.tarball }}"
+          --access public --provenance
+      - name: Remove bootstrap credential file
+        if: ${{ always() }}
+        shell: bash
+        env:
+          NPM_CONFIG_USERCONFIG: ${{ runner.temp }}/olovoice-npmrc
+        run: rm -f "${NPM_CONFIG_USERCONFIG}"
+
+  publish-pypi:
+    name: Publish PyPI package
+    needs: [preflight, build-npm, build-python, publish-npm]
+    runs-on: ubuntu-24.04
+    environment: release
+    permissions:
+      actions: read
+      contents: read
+      id-token: write
+    steps:
+      - name: Require bootstrap credential removal before PyPI publishing
+        shell: bash
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_BOOTSTRAP_TOKEN }}
+        run: |
+          set -euo pipefail
+          if [[ -n "${NODE_AUTH_TOKEN:-}" ]]; then
+            echo 'Remove and revoke NPM_BOOTSTRAP_TOKEN, then rerun this release before publishing to PyPI.' >&2
+            exit 1
+          fi
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
+        with:
+          ref: ${{ needs.preflight.outputs.release_commit }}
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: olovoice-python-release
+          path: release-artifacts/python
+      - name: Verify downloaded Python artifacts and unchanged tag
+        id: python_artifacts
+        shell: bash
+        env:
+          RELEASE_COMMIT: ${{ needs.preflight.outputs.release_commit }}
+          RELEASE_TAG: ${{ needs.preflight.outputs.release_tag }}
+          VERSION: ${{ needs.preflight.outputs.version }}
+        run: |
+          set -euo pipefail
+
+          git fetch --force --no-tags origin \
+            "+refs/tags/${RELEASE_TAG}:refs/tags/${RELEASE_TAG}"
+          test "$(git rev-parse "${RELEASE_TAG}^{commit}")" = "${RELEASE_COMMIT}"
+
+          staging="${GITHUB_WORKSPACE}/release-artifacts/python"
+          manifest="${staging}/SHA256SUMS"
+          test -f "${manifest}"
+          test "$(wc -l < "${manifest}" | tr -d ' ')" = "2"
+          test "$(find "${staging}" -maxdepth 1 -type f | wc -l | tr -d ' ')" = "3"
+          wheel_name="$(awk '$2 ~ /\.whl$/ {print $2}' "${manifest}")"
+          sdist_name="$(awk '$2 ~ /\.tar\.gz$/ {print $2}' "${manifest}")"
+          [[ "${wheel_name}" =~ ^olovoice-${VERSION}-[^/]+\.whl$ ]]
+          test "${sdist_name}" = "olovoice-${VERSION}.tar.gz"
+          test -f "${staging}/${wheel_name}"
+          test -f "${staging}/${sdist_name}"
+          (
+            cd "${staging}"
+            sha256sum --check --strict SHA256SUMS
+          )
+
+          echo "manifest=${manifest}" >> "${GITHUB_OUTPUT}"
+          echo "staging=${staging}" >> "${GITHUB_OUTPUT}"
+          echo "wheel_name=${wheel_name}" >> "${GITHUB_OUTPUT}"
+          echo "sdist_name=${sdist_name}" >> "${GITHUB_OUTPUT}"
+      - name: Determine PyPI publish or exact-match recovery
+        id: pypi_state
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          MANIFEST: ${{ steps.python_artifacts.outputs.manifest }}
+          SDIST_NAME: ${{ steps.python_artifacts.outputs.sdist_name }}
+          STAGING: ${{ steps.python_artifacts.outputs.staging }}
+          VERSION: ${{ needs.preflight.outputs.version }}
+          WHEEL_NAME: ${{ steps.python_artifacts.outputs.wheel_name }}
+        run: |
+          set -euo pipefail
+
+          require_previous_successful_publish() {
+            local expected_step="$1"
+            local attempt jobs
+            (( GITHUB_RUN_ATTEMPT > 1 )) || return 1
+            for ((attempt = 1; attempt < GITHUB_RUN_ATTEMPT; attempt++)); do
+              jobs="$(gh api --paginate \
+                -H 'Accept: application/vnd.github+json' \
+                -H 'X-GitHub-Api-Version: 2022-11-28' \
+                "repos/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}/attempts/${attempt}/jobs?per_page=100" \
+                --jq '.jobs[]' | jq -sc '.')"
+              if jq -e --arg step "${expected_step}" \
+                'any(.[];
+                  .name == "Publish PyPI package" and
+                  any(.steps[]; .name == $step and .conclusion == "success")
+                )' <<< "${jobs}" > /dev/null; then
+                return 0
+              fi
+            done
+            return 1
+          }
+
+          wheel_upload_dir="${GITHUB_WORKSPACE}/release-artifacts/python-upload-wheel"
+          sdist_upload_dir="${GITHUB_WORKSPACE}/release-artifacts/python-upload-sdist"
+          mkdir "${wheel_upload_dir}" "${sdist_upload_dir}"
+          status="$(curl --silent --show-error --retry 3 --retry-all-errors \
+            --connect-timeout 10 --max-time 30 --output "${RUNNER_TEMP}/pypi-version.json" \
+            --write-out '%{http_code}' \
+            "https://pypi.org/pypi/olovoice/${VERSION}/json")"
+
+          if [[ "${status}" = "404" ]]; then
+            cp "${STAGING}/${WHEEL_NAME}" "${wheel_upload_dir}/${WHEEL_NAME}"
+            cp "${STAGING}/${SDIST_NAME}" "${sdist_upload_dir}/${SDIST_NAME}"
+          elif [[ "${status}" = "200" ]]; then
+            test "$(jq -r '.info.version' "${RUNNER_TEMP}/pypi-version.json")" = "${VERSION}"
+            jq -e --arg wheel "${WHEEL_NAME}" --arg sdist "${SDIST_NAME}" \
+              '([.urls[].filename] | length) <= 2 and ([.urls[].filename] | length) == ([.urls[].filename] | unique | length) and all(.urls[]; .filename == $wheel or .filename == $sdist)' \
+              "${RUNNER_TEMP}/pypi-version.json" > /dev/null
+            for filename in "${WHEEL_NAME}" "${SDIST_NAME}"; do
+              expected_sha256="$(awk -v name="${filename}" '$2 == name {print $1}' "${MANIFEST}")"
+              [[ "${expected_sha256}" =~ ^[0-9a-f]{64}$ ]]
+              published_sha256="$(jq -r --arg name "${filename}" \
+                '[.urls[] | select(.filename == $name)] | if length == 1 then .[0].digests.sha256 else "" end' \
+                "${RUNNER_TEMP}/pypi-version.json")"
+              if [[ -n "${published_sha256}" ]]; then
+                test "${published_sha256}" = "${expected_sha256}" || {
+                  echo "Published PyPI artifact differs: ${filename}." >&2
+                  exit 1
+                }
+                if [[ "${filename}" = "${WHEEL_NAME}" ]]; then
+                  expected_step='Publish verified Python wheel with attestations'
+                else
+                  expected_step='Publish verified Python sdist with attestations'
+                fi
+                require_previous_successful_publish "${expected_step}" || {
+                  echo "Existing PyPI artifact was not published by a successful prior attempt of this release run: ${filename}." >&2
+                  exit 1
+                }
+              else
+                if [[ "${filename}" = "${WHEEL_NAME}" ]]; then
+                  cp "${STAGING}/${filename}" "${wheel_upload_dir}/${filename}"
+                else
+                  cp "${STAGING}/${filename}" "${sdist_upload_dir}/${filename}"
+                fi
+              fi
+            done
+          else
+            echo "PyPI version lookup returned HTTP ${status}." >&2
+            exit 1
+          fi
+
+          wheel_pending="$(find "${wheel_upload_dir}" -maxdepth 1 -type f | wc -l | tr -d ' ')"
+          sdist_pending="$(find "${sdist_upload_dir}" -maxdepth 1 -type f | wc -l | tr -d ' ')"
+          [[ "${wheel_pending}" =~ ^[0-1]$ ]]
+          [[ "${sdist_pending}" =~ ^[0-1]$ ]]
+          pending_count="$((wheel_pending + sdist_pending))"
+          [[ "${pending_count}" =~ ^[0-2]$ ]]
+          test "${wheel_pending}" = '1' && echo 'publish_wheel=true' >> "${GITHUB_OUTPUT}" || \
+            echo 'publish_wheel=false' >> "${GITHUB_OUTPUT}"
+          test "${sdist_pending}" = '1' && echo 'publish_sdist=true' >> "${GITHUB_OUTPUT}" || \
+            echo 'publish_sdist=false' >> "${GITHUB_OUTPUT}"
+          if [[ "${pending_count}" = "0" ]]; then
+            echo 'Exact PyPI artifacts were published by this release run; recovery is complete.'
+          else
+            echo "Publishing ${pending_count} missing PyPI artifact(s)."
+          fi
+      - name: Publish verified Python wheel with attestations
+        if: steps.pypi_state.outputs.publish_wheel == 'true'
+        uses: pypa/gh-action-pypi-publish@dc37677b2e1c63e2034f94d8a5b11f265b73ba33 # v1.14.2
+        with:
+          packages-dir: release-artifacts/python-upload-wheel/
+          verify-metadata: true
+          skip-existing: false
+          verbose: false
+          print-hash: true
+          attestations: true
+      - name: Publish verified Python sdist with attestations
+        if: steps.pypi_state.outputs.publish_sdist == 'true'
+        uses: pypa/gh-action-pypi-publish@dc37677b2e1c63e2034f94d8a5b11f265b73ba33 # v1.14.2
+        with:
+          packages-dir: release-artifacts/python-upload-sdist/
+          verify-metadata: true
+          skip-existing: false
+          verbose: false
+          print-hash: true
+          attestations: true

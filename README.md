@@ -1,16 +1,22 @@
-# olovoice SDKs
+# OloVoice SDKs
 
-Official client SDKs for the [olovoice Public API](https://docs.olovoice.ai) (`https://api.olovoice.ai`).
+Official client SDKs for the [OloVoice Public API](https://docs.olovoice.ai) (`https://api.olovoice.ai`).
 The canonical source repository is [olovoice/olovoice-sdk](https://github.com/olovoice/olovoice-sdk).
 
-> **Pre-release:** the public npm and PyPI names are not yet reserved by the
-> official publisher. Do not install or publish either public package name
-> until the reservation and Trusted Publisher checklist below is complete.
+> **Beta (0.1.x):** these SDKs are public, pre-1.0 releases. Interfaces may
+> evolve before 1.0, so pin and test an exact SDK version for production use.
 
 | Package | Language | Directory | Current status |
 | --- | --- | --- | --- |
-| `olovoice` (npm) | TypeScript / JavaScript (Node 22+) | [typescript/](typescript/) | Local validation only; not released |
-| `olovoice` (PyPI) | Python 3.11+ (sync + async) | [python/](python/) | Local validation only; not released |
+| `olovoice` (npm) | TypeScript / JavaScript (Node 22+) | [typescript/](typescript/) | 0.1.0 beta |
+| `olovoice` (PyPI) | Python 3.11+ (sync + async) | [python/](python/) | 0.1.0 beta |
+
+## Install
+
+```bash
+npm install olovoice@0.1.0
+python -m pip install olovoice==0.1.0
+```
 
 Both SDKs are maintained against the [vendored English and Turkish OpenAPI
 snapshots](contract-tests/) (spec v2.0.0). In the combined workspace, the
@@ -124,31 +130,38 @@ verified `SHA256SUMS` manifest.
   SHA256 manifests. Normal CI keeps read-only permissions and has no publish or
   OIDC permission.
 
-## Human release gate
+## Registry release gate
 
-There is deliberately no registry-publish job in this tree. Complete these
-steps before adding one:
+Normal CI cannot publish. Registry releases must use the protected release
+workflow and complete these checks:
 
-1. Reserve and verify both `olovoice` names using organization-controlled npm
-   and PyPI accounts. Keep the public install commands out of customer docs
-   until ownership is visible on both registries.
+1. Verify the organization-controlled npm and PyPI accounts have 2FA enabled,
+   are the intended package owners, and can use the exact `olovoice` names.
 2. Verify the release commit is from the canonical
    `https://github.com/olovoice/olovoice-sdk` repository and that npm/PyPI
    metadata points to that exact repository.
-3. Protect a release environment with required human approval and configure
-   npm and PyPI Trusted Publishers for the exact repository, workflow, and
-   environment.
+3. Protect the `release` environment with required human approval. Configure a
+   PyPI pending Trusted Publisher for the exact repository, workflow, and
+   environment. Configure npm Trusted Publishing whenever the npm package
+   already exists.
 4. For npm publishing, use the reviewed full-SHA pins from CI for checkout and
-   Node setup, Node 24, npm 11.5.1 or newer, and job-level `id-token: write`.
-   npm Trusted Publishing supplies provenance automatically. The package
-   additionally refuses publishing unless GitHub Actions sets
+   Node setup, Node 24, npm 11.19.0, and job-level `id-token: write`.
+   npm Trusted Publishing supplies provenance automatically; `publishConfig`
+   also fixes public access, the official registry, and provenance. The package
+   refuses publishing unless GitHub Actions sets
    `OLOVOICE_PUBLISH_APPROVAL=registry-names-reserved` in that protected job.
-5. For PyPI, use a protected environment and job-level `id-token: write`. Pin
+5. npm does not support Trusted Publishing for a package's first release. For
+   that bootstrap only, place a short-lived granular token in the protected
+   environment as `NPM_BOOTSTRAP_TOKEN`. After the first successful publish,
+   configure the exact npm Trusted Publisher, delete the environment secret,
+   and revoke the token. Subsequent releases must leave the secret absent and
+   use OIDC.
+6. For PyPI, use the protected environment and job-level `id-token: write`. Pin
    `pypa/gh-action-pypi-publish` to a reviewed full commit SHA corresponding to
    a specific release. Pass only the checksummed artifacts produced by the
    validated build job; do not use a stored API token or a broad `dist/*` glob.
-6. Tag the reviewed commit, verify both package versions match the tag, run the
+7. Tag the reviewed commit, verify both package versions match the tag, run the
    artifact smokes, verify each `SHA256SUMS` entry, obtain approval, and only
-   then enable the publish jobs.
+   then publish.
 
 Normal CI intentionally has read-only permissions and cannot publish.

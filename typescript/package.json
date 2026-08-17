@@ -1,9 +1,9 @@
 {
   "name": "olovoice",
   "version": "0.1.0",
-  "description": "Official TypeScript/JavaScript SDK for the olovoice Public API — AI voice agents, outbound calls, web calls, call logs, and metrics.",
+  "description": "Official TypeScript/JavaScript SDK for the OloVoice Public API — AI voice agents, outbound calls, web calls, call logs, and metrics.",
   "license": "MIT",
-  "author": "olovoice",
+  "author": "OloVoice",
   "homepage": "https://docs.olovoice.ai",
   "repository": {
     "type": "git",
@@ -12,6 +12,12 @@
   },
   "bugs": {
     "url": "https://github.com/olovoice/olovoice-sdk/issues"
+  },
+  "packageManager": "npm@11.19.0",
+  "publishConfig": {
+    "access": "public",
+    "registry": "https://registry.npmjs.org/",
+    "provenance": true
   },
   "keywords": ["olovoice", "voice", "ai", "telephony", "voice-agent", "sdk"],
   "type": "module",
