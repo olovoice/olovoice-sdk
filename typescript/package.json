@@ -1,0 +1,56 @@
+{
+  "name": "olovoice",
+  "version": "0.1.0",
+  "description": "Official TypeScript/JavaScript SDK for the olovoice Public API — AI voice agents, outbound calls, web calls, call logs, and metrics.",
+  "license": "MIT",
+  "author": "olovoice",
+  "homepage": "https://docs.olovoice.ai",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/olovoice/olovoice-sdk.git",
+    "directory": "typescript"
+  },
+  "bugs": {
+    "url": "https://github.com/olovoice/olovoice-sdk/issues"
+  },
+  "keywords": ["olovoice", "voice", "ai", "telephony", "voice-agent", "sdk"],
+  "type": "module",
+  "sideEffects": false,
+  "main": "./dist/cjs/index.js",
+  "module": "./dist/esm/index.js",
+  "types": "./dist/esm/index.d.ts",
+  "exports": {
+    ".": {
+      "import": {
+        "types": "./dist/esm/index.d.ts",
+        "default": "./dist/esm/index.js"
+      },
+      "require": {
+        "types": "./dist/cjs/index.d.ts",
+        "default": "./dist/cjs/index.js"
+      }
+    }
+  },
+  "files": ["dist", "README.md", "LICENSE"],
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "build": "node ./scripts/build.mjs",
+    "test:unit": "node --test test/client.test.js",
+    "test:types": "tsc -p tsconfig.type-tests.json",
+    "test": "npm run build && npm run test:unit && npm run test:types",
+    "check:version": "node ./scripts/check-version.mjs",
+    "check:package": "node ./scripts/verify-package-files.mjs",
+    "lint:package": "publint",
+    "audit:types": "attw",
+    "verify:release": "npm run check:version && npm test && npm run check:package",
+    "prepack": "npm run verify:release",
+    "prepublishOnly": "node ./scripts/assert-publish-authorized.mjs"
+  },
+  "devDependencies": {
+    "@arethetypeswrong/cli": "0.18.5",
+    "publint": "0.3.23",
+    "typescript": "5.9.3"
+  }
+}
