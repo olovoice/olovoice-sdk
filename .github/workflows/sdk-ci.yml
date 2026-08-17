@@ -1,0 +1,217 @@
+name: SDK CI
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  contract-test:
+    name: Public API contract
+    runs-on: ubuntu-24.04
+    defaults:
+      run:
+        working-directory: contract-tests
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6.5.0
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: contract-tests/package-lock.json
+      - run: npm ci
+      - run: npm test
+      - name: Parse workflow YAML
+        run: >-
+          ruby -e "require 'yaml'; YAML.load_file('../.github/workflows/sdk-ci.yml');
+          puts 'workflow YAML valid'"
+
+  typescript-test:
+    name: TypeScript / Node ${{ matrix.node }} / ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, windows-2025]
+        node: [22, 24]
+    defaults:
+      run:
+        working-directory: typescript
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6.5.0
+        with:
+          node-version: ${{ matrix.node }}
+          cache: npm
+          cache-dependency-path: typescript/package-lock.json
+      - run: npm ci
+      - run: npm run check:version
+      - run: npm test
+
+  typescript-package:
+    name: TypeScript package artifact
+    runs-on: ubuntu-24.04
+    defaults:
+      run:
+        working-directory: typescript
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6.5.0
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: typescript/package-lock.json
+      - run: npm ci
+      - name: Audit locked npm dependencies
+        run: npm audit --audit-level=high
+      - name: Verify npm registry signatures and attestations
+        run: npm audit signatures
+      - name: Build guarded tarball
+        run: npm pack --pack-destination "${RUNNER_TEMP}"
+      - name: Resolve tarball path
+        id: tarball
+        shell: bash
+        run: |
+          version="$(node -p "require('./package.json').version")"
+          echo "path=${RUNNER_TEMP}/olovoice-${version}.tgz" >> "${GITHUB_OUTPUT}"
+      - name: Smoke installed ESM, CJS, and declarations
+        run: node scripts/smoke-package.mjs "${{ steps.tarball.outputs.path }}"
+      - name: Lint package exports
+        run: npm run lint:package -- "${{ steps.tarball.outputs.path }}"
+      - name: Audit declaration resolution
+        run: npm run audit:types -- "${{ steps.tarball.outputs.path }}"
+      - name: Generate and verify SHA256 manifest
+        run: >-
+          node scripts/write-sha256-manifest.mjs
+          "${{ steps.tarball.outputs.path }}"
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: olovoice-npm-package
+          path: |
+            ${{ steps.tarball.outputs.path }}
+            ${{ runner.temp }}/SHA256SUMS
+          if-no-files-found: error
+          compression-level: 0
+
+  python-test:
+    name: Python ${{ matrix.python }}
+    runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        python: ['3.11', '3.12', '3.13', '3.14']
+    defaults:
+      run:
+        working-directory: python
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6.3.0
+        with:
+          python-version: ${{ matrix.python }}
+      - uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9 # v9.0.0
+        with:
+          version: '0.12.3'
+          enable-cache: true
+          cache-dependency-glob: python/uv.lock
+      - run: >-
+          uv sync --frozen --no-build --python "${{ matrix.python }}"
+          --extra dev --no-install-project
+      - name: Verify matrix interpreter
+        run: >-
+          uv run --frozen --no-sync python -c
+          "import sys; expected=tuple(map(int, '${{ matrix.python }}'.split('.')));
+          assert sys.version_info[:2] == expected, (sys.version, expected)"
+      - run: uv run --frozen --no-sync python -m pytest -p no:cacheprovider
+      - if: matrix.python == '3.11'
+        run: uv run --frozen --no-sync python -m mypy --strict olovoice tests
+      - if: matrix.python == '3.11'
+        name: Resolve and audit lowest supported runtime dependencies
+        run: >-
+          uv run --frozen --no-sync python
+          ../scripts/check_python_lowest_dependencies.py
+          --python "${{ matrix.python }}"
+      - if: matrix.python == '3.13'
+        run: uv run --frozen --no-sync python -m bandit -q -r olovoice
+      - if: matrix.python == '3.13'
+        name: Audit locked Python environment
+        run: >-
+          uv run --frozen --no-sync python -m pip_audit
+          --local --strict --progress-spinner off
+
+  python-package:
+    name: Python package artifact
+    needs: python-test
+    runs-on: ubuntu-24.04
+    defaults:
+      run:
+        working-directory: python
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6.3.0
+        with:
+          python-version: '3.13'
+      - uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9 # v9.0.0
+        with:
+          version: '0.12.3'
+          enable-cache: true
+          cache-dependency-glob: python/uv.lock
+      - run: >-
+          uv sync --frozen --no-build --python "3.13"
+          --extra release --no-install-project
+      - name: Build and validate wheel and sdist without isolation
+        run: >-
+          uv run --frozen --no-sync python ../scripts/build_python_release.py
+          --out-dir "${RUNNER_TEMP}/python-dist"
+      - name: Resolve exact artifact paths
+        id: python_artifacts
+        shell: bash
+        run: |
+          manifest="${RUNNER_TEMP}/python-dist/SHA256SUMS"
+          wheel_name="$(awk '$2 ~ /\.whl$/ {print $2}' "${manifest}")"
+          sdist_name="$(awk '$2 ~ /\.tar\.gz$/ {print $2}' "${manifest}")"
+          test -n "${wheel_name}"
+          test -n "${sdist_name}"
+          wheel="${RUNNER_TEMP}/python-dist/${wheel_name}"
+          sdist="${RUNNER_TEMP}/python-dist/${sdist_name}"
+          test -f "${wheel}"
+          test -f "${sdist}"
+          test -f "${manifest}"
+          echo "wheel=${wheel}" >> "${GITHUB_OUTPUT}"
+          echo "sdist=${sdist}" >> "${GITHUB_OUTPUT}"
+      - name: Verify SHA256 manifest
+        shell: bash
+        run: |
+          cd "${RUNNER_TEMP}/python-dist"
+          sha256sum --check SHA256SUMS
+      - name: Install the built wheel against locked dependencies
+        shell: bash
+        run: |
+          smoke_root="${RUNNER_TEMP}/wheel-smoke"
+          uv pip install --python .venv/bin/python --no-deps \
+            --target "${smoke_root}" "${{ steps.python_artifacts.outputs.wheel }}"
+          cd "${RUNNER_TEMP}"
+          WHEEL_SMOKE_ROOT="${smoke_root}" PYTHONPATH="${smoke_root}" \
+            "${GITHUB_WORKSPACE}/python/.venv/bin/python" -c \
+            "import os, pathlib, olovoice; root=pathlib.Path(os.environ['WHEEL_SMOKE_ROOT']).resolve(); assert pathlib.Path(olovoice.__file__).resolve().is_relative_to(root); assert olovoice.__version__"
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: olovoice-python-package
+          path: |
+            ${{ steps.python_artifacts.outputs.wheel }}
+            ${{ steps.python_artifacts.outputs.sdist }}
+            ${{ runner.temp }}/python-dist/SHA256SUMS
+          if-no-files-found: error
+          compression-level: 0

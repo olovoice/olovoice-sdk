@@ -1,0 +1,3346 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "OloVoice Public API",
+    "version": "2.0.0",
+    "description": "Start outbound phone calls, run browser/web calls, create leads, manage assistants, and pull call logs, recordings, and metrics.\n\nThis reference is generated from a code-verified read of the live API routes. The public gateway strips the internal `/api/v1` and `/api/public` prefixes, so you call `POST /call`, `GET /call-logs`, etc.",
+    "contact": {
+      "name": "OloVoice",
+      "url": "https://dashboard.olovoice.ai"
+    }
+  },
+  "servers": [
+    {
+      "url": "https://api.olovoice.ai",
+      "description": "Production"
+    }
+  ],
+  "security": [
+    {
+      "bearerAuth": []
+    }
+  ],
+  "tags": [
+    {
+      "name": "Calls",
+      "description": "Start outbound phone and web calls."
+    },
+    {
+      "name": "Call Logs",
+      "description": "Read call logs and signed recording URLs."
+    },
+    {
+      "name": "Assistants",
+      "description": "Manage the AI assistants that drive your calls."
+    },
+    {
+      "name": "Leads",
+      "description": "Create leads and auto-trigger calls."
+    },
+    {
+      "name": "Metrics",
+      "description": "Aggregated call analytics."
+    }
+  ],
+  "paths": {
+    "/call": {
+      "post": {
+        "tags": [
+          "Calls"
+        ],
+        "summary": "Create call",
+        "operationId": "createCall",
+        "x-required-scopes": ["calls:create"],
+        "description": "Start an **outbound phone call**. Dials `customer.number` from the org number `phoneNumberId`, driven by an assistant, squad, or workflow.\n\nAll field names are camelCase. `serverUrl` and every tool `webhookUrl` must be HTTPS.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Request accepted. Inspect `carrier`: `success: true` can still mean the dialer skipped the call.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CreateCallResponse"
+                },
+                "example": {
+                  "success": true,
+                  "subscriptionLimits": {
+                    "concurrencyBlocked": false,
+                    "concurrencyLimit": 10,
+                    "remainingConcurrentCalls": 9
+                  },
+                  "payload": {
+                    "callId": "a1b2c3d4-5678-90ab-cdef-1234567890ab",
+                    "assistantId": "00000000-0000-0000-0000-000000000000",
+                    "phoneNumberId": "00000000-0000-0000-0000-000000000000",
+                    "customer": {
+                      "name": "Kemal",
+                      "number": "+905551234567"
+                    },
+                    "firstMessage": "Hi, how can I help you today?",
+                    "content": "You are a helpful assistant. Answer the user's questions clearly.",
+                    "serverUrl": "https://your-domain.com/webhooks/call-report",
+                    "llm": {
+                      "provider": "openai",
+                      "model": "gpt-4o"
+                    },
+                    "tts": {
+                      "provider": "elevenlabs",
+                      "model": "eleven_turbo_v2_5",
+                      "voiceId": "EXAVITQu4vr4xnSDxMaL"
+                    },
+                    "stt": {
+                      "provider": "deepgram",
+                      "model": "nova-2",
+                      "language": "en"
+                    },
+                    "predefinedFunctions": {
+                      "enableEndCallFunction": true
+                    },
+                    "organizationId": "00000000-0000-0000-0000-000000000000",
+                    "requestId": "f0e1d2c3-4455-6677-8899-aabbccddeeff"
+                  },
+                  "carrier": {
+                    "ok": true
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorWithSuccess"
+                },
+                "examples": {
+                  "case1": {
+                    "summary": "Validation / phone-format / snake_case error",
+                    "value": {
+                      "success": false,
+                      "error": "customer.number geçerli bir telefon numarası olmalıdır"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "examples": {
+                  "unauthorized": {
+                    "summary": "Missing/invalid API key",
+                    "value": {
+                      "error": "Unauthorized"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "402": {
+            "description": "Payment Required",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorWithSuccess"
+                },
+                "examples": {
+                  "case1": {
+                    "summary": "Insufficient wallet balance",
+                    "value": {
+                      "success": false,
+                      "error": "Yetersiz bakiye. Arama başlatılamıyor."
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too Many Requests",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorWithSuccess"
+                },
+                "examples": {
+                  "case1": {
+                    "summary": "Concurrency / rate limit reached",
+                    "value": {
+                      "success": false,
+                      "error": "Organizasyon eşzamanlı çağrı limitine ulaştı. Lütfen diğer görüşmeler tamamlandıktan sonra tekrar deneyin.",
+                      "subscriptionLimits": {
+                        "concurrencyBlocked": true,
+                        "concurrencyLimit": 10,
+                        "remainingConcurrentCalls": 0
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "Bad Gateway",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorWithSuccess"
+                },
+                "examples": {
+                  "case1": {
+                    "summary": "Carrier (dialer) unreachable",
+                    "value": {
+                      "success": false,
+                      "error": "Taşıyıcıya ulaşılamadı",
+                      "detail": "fetch failed"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "phoneNumberId",
+                  "customer",
+                  "llm",
+                  "conversation",
+                  "backgroundAudio"
+                ],
+                "allOf": [
+                  {
+                    "description": "At least one selector is required. A direct assistant request must carry its prompts; squad/workflow requests may hydrate them from the saved graph.",
+                    "anyOf": [
+                      { "required": ["squadId"] },
+                      { "required": ["workflowId"] },
+                      { "required": ["assistantId", "firstMessage", "content"] }
+                    ]
+                  },
+                  {
+                    "description": "Classic audio requires both TTS and STT. OpenAI realtime half-cascade requires TTS; native-audio requires neither.",
+                    "anyOf": [
+                      { "required": ["tts", "stt"] },
+                      {
+                        "required": ["tts"],
+                        "properties": {
+                          "llm": { "$ref": "#/components/schemas/OpenAiRealtimeLlm" }
+                        }
+                      },
+                      {
+                        "properties": {
+                          "llm": {
+                            "allOf": [
+                              { "$ref": "#/components/schemas/OpenAiRealtimeLlm" },
+                              {
+                                "properties": {
+                                  "realtimeMode": { "const": "nativeAudio" }
+                                },
+                                "required": ["realtimeMode"]
+                              }
+                            ]
+                          }
+                        }
+                      }
+                    ]
+                  }
+                ],
+                "description": "All field names are camelCase — snake_case returns `400`.",
+                "properties": {
+                  "assistantId": {
+                    "type": "string",
+                    "minLength": 1,
+                    "description": "Assistant to run. One of assistantId/squadId/workflowId is required."
+                  },
+                  "squadId": {
+                    "type": "string",
+                    "minLength": 1,
+                    "description": "Squad to run (resolves its own entry assistant)."
+                  },
+                  "workflowId": {
+                    "type": "string",
+                    "minLength": 1,
+                    "description": "Workflow to run (resolves its own start node)."
+                  },
+                  "phoneNumberId": {
+                    "type": "string",
+                    "description": "Org phone number to dial from. Must support outbound and have a trunk configured."
+                  },
+                  "customer": {
+                    "type": "object",
+                    "required": [
+                      "number"
+                    ],
+                    "properties": {
+                      "number": {
+                        "type": "string",
+                        "pattern": "^\\+?[0-9]{6,20}$",
+                        "description": "Destination number. Must match `^\\+?[0-9]{6,20}$`. E.164 recommended.",
+                        "example": "+905551234567"
+                      },
+                      "name": {
+                        "type": "string",
+                        "example": "Kemal"
+                      }
+                    }
+                  },
+                  "firstMessage": {
+                    "type": "string",
+                    "minLength": 1,
+                    "description": "Opening line. Required unless the squad/workflow supplies it."
+                  },
+                  "content": {
+                    "type": "string",
+                    "minLength": 1,
+                    "description": "System prompt. Required unless the squad/workflow supplies it."
+                  },
+                  "serverUrl": {
+                    "type": "string",
+                    "format": "uri",
+                    "pattern": "^https://",
+                    "description": "HTTPS post-call report webhook. HTTPS only."
+                  },
+                  "llm": {
+                    "$ref": "#/components/schemas/RuntimeLlmConfig"
+                  },
+                  "tts": {
+                    "$ref": "#/components/schemas/RuntimeTtsConfig"
+                  },
+                  "stt": {
+                    "$ref": "#/components/schemas/RuntimeSttConfig"
+                  },
+                  "conversation": {
+                    "type": "object",
+                    "additionalProperties": true,
+                    "description": "Turn-taking / endpointing settings. Required object."
+                  },
+                  "backgroundAudio": {
+                    "$ref": "#/components/schemas/RuntimeBackgroundAudioConfig"
+                  },
+                  "privacy": {
+                    "type": "object",
+                    "additionalProperties": true,
+                    "default": {},
+                    "description": "Compatibility input. Omission is normalized to `{}`; effective `recordCalls`, `hipaaCompliant`, and `ologuardEnabled` values always come from the saved assistant policy and cannot be overridden per call."
+                  },
+                  "predefinedFunctions": {
+                    "type": "object",
+                    "additionalProperties": true,
+                    "default": {},
+                    "description": "Optional built-in tools (end-call, keypad, DTMF). Omission is normalized to `{}`."
+                  },
+                  "tools": {
+                    "type": "array",
+                    "items": {
+                      "type": "object"
+                    },
+                    "description": "Inline tools. Each needs `name` + `webhookUrl` (HTTPS) + `method`."
+                  },
+                  "toolIds": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    },
+                    "description": "IDs of saved tools (must belong to your org)."
+                  },
+                  "structuredOutputIds": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  "fileIds": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    },
+                    "description": "Knowledge-base file IDs."
+                  },
+                  "extras": {
+                    "type": "object",
+                    "additionalProperties": true,
+                    "description": "Free-form metadata. `extras.mem0Enabled` is a reserved boolean compatibility signal, not a per-call switch; the server derives the effective Olophin value from the organization package and saved assistant."
+                  }
+                }
+              },
+              "example": {
+                "assistantId": "00000000-0000-0000-0000-000000000000",
+                "phoneNumberId": "00000000-0000-0000-0000-000000000000",
+                "customer": {
+                  "name": "Kemal",
+                  "number": "+905551234567"
+                },
+                "firstMessage": "Hi, how can I help you today?",
+                "content": "You are a helpful assistant. Answer the user's questions clearly.",
+                "serverUrl": "https://your-domain.com/webhooks/call-report",
+                "llm": {
+                  "provider": "openai",
+                  "model": "gpt-4o"
+                },
+                "tts": {
+                  "provider": "elevenlabs",
+                  "model": "eleven_turbo_v2_5",
+                  "voiceId": "EXAVITQu4vr4xnSDxMaL",
+                  "autoMode": true,
+                  "speed": 1
+                },
+                "stt": {
+                  "provider": "deepgram",
+                  "model": "nova-2",
+                  "language": "en",
+                  "interimResults": true,
+                  "smartFormat": true
+                },
+                "conversation": {
+                  "allowInterruptions": true
+                },
+                "backgroundAudio": {
+                  "ambient": {
+                    "builtin": "room",
+                    "volume": 1
+                  }
+                },
+                "predefinedFunctions": {
+                  "enableEndCallFunction": true,
+                  "enableDialKeypad": false
+                },
+                "toolIds": [],
+                "structuredOutputIds": [],
+                "fileIds": [],
+                "extras": {
+                  "customTag": "crm-sync-42"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/web-call": {
+      "post": {
+        "tags": [
+          "Calls"
+        ],
+        "summary": "Create web call",
+        "operationId": "createWebCall",
+        "x-required-scopes": ["web_calls:create"],
+        "x-rollout": {
+          "enabledByDefault": false,
+          "featureFlag": "PUBLIC_WEB_CALL_ENABLED",
+          "disabledStatus": 403,
+          "disabledCode": "web_call_disabled"
+        },
+        "description": "Start a **phoneless (web/browser/app) call**. Creates a LiveKit room, dispatches the assistant, and returns a short-lived participant token your client uses over WebRTC.\n\n> Server-to-server only — never ship the API key to a browser. Return only the `token` (+ `livekitUrl`, `roomName`, `callId`). Browser CORS is disabled by default; use your own backend proxy.\n\nGated behind the `PUBLIC_WEB_CALL_ENABLED` server flag (returns `403 web_call_disabled` when off). Shares the single org concurrency pool with `/call`. The token defaults to 60 seconds and permits only room join, microphone publishing, and subscribing to agent audio. `costs`, `costConfig`, `cost_config`, `costCurrency`, and `webParticipantJoinTimeoutSeconds` are server-owned and return `400 server_owned_field` if supplied.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Room created; token issued.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WebCallResponse"
+                },
+                "example": {
+                  "success": true,
+                  "callId": "web-7b2c8f1e-2a4d-4c6b-9f3a-1e2d3c4b5a6f",
+                  "roomName": "web-7b2c8f1e-2a4d-4c6b-9f3a-1e2d3c4b5a6f",
+                  "token": "<short-lived LiveKit participant JWT>",
+                  "livekitUrl": "wss://rtc.olovoice.ai",
+                  "expiresInSeconds": 60,
+                  "startedAt": "2026-06-04T09:10:01.123Z",
+                  "subscriptionLimits": {
+                    "concurrencyBlocked": false,
+                    "concurrencyLimit": 10,
+                    "remainingConcurrentCalls": 9
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorWithSuccess"
+                },
+                "examples": {
+                  "case1": {
+                    "summary": "Missing organizationId / no assistantId|squadId|workflowId / snake_case",
+                    "value": {
+                      "success": false,
+                      "error": "assistantId veya squadId veya workflowId zorunludur."
+                    }
+                  },
+                  "serverOwnedField": {
+                    "summary": "A server-owned billing or join-timeout field was supplied",
+                    "value": {
+                      "success": false,
+                      "error": "Sunucu tarafından yönetilen alan istemci payload'ında gönderilemez.",
+                      "code": "server_owned_field",
+                      "field": "costs"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorWithSuccess"
+                },
+                "examples": {
+                  "unauthorized": {
+                    "summary": "Missing/invalid API key",
+                    "value": {
+                      "success": false,
+                      "error": "Unauthorized"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "402": {
+            "description": "Payment Required",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorWithSuccess"
+                },
+                "examples": {
+                  "case1": {
+                    "summary": "Insufficient wallet balance",
+                    "value": {
+                      "success": false,
+                      "error": "Yetersiz bakiye. Arama başlatılamıyor."
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorWithSuccess"
+                },
+                "examples": {
+                  "disabled": {
+                    "summary": "Endpoint disabled (PUBLIC_WEB_CALL_ENABLED off)",
+                    "value": {
+                      "success": false,
+                      "error": "Web call API is not enabled",
+                      "code": "web_call_disabled"
+                    }
+                  },
+                  "mismatch": {
+                    "summary": "organizationId does not match the API key's org",
+                    "value": {
+                      "success": false,
+                      "error": "organizationId, API anahtarının organizasyonu ile eşleşmiyor."
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "organizationId"
+                ],
+                "anyOf": [
+                  { "required": ["assistantId"] },
+                  { "required": ["squadId"] },
+                  { "required": ["workflowId"] }
+                ],
+                "allOf": [
+                  {
+                    "not": {
+                      "anyOf": [
+                        { "required": ["costs"] },
+                        { "required": ["costConfig"] },
+                        { "required": ["cost_config"] },
+                        { "required": ["costCurrency"] },
+                        { "required": ["webParticipantJoinTimeoutSeconds"] }
+                      ]
+                    }
+                  }
+                ],
+                "description": "`organizationId` is required and must equal your API key's organization. One of `assistantId`/`squadId`/`workflowId` is required. Same camelCase config objects as `/call` (a top-level `toolIds` is ignored — use inline `tools`). Server-owned cost and participant-timeout fields are rejected with `400 server_owned_field`.",
+                "properties": {
+                  "organizationId": {
+                    "type": "string",
+                    "description": "Must equal the API key's organization. Tenant-mismatch guard, not auth."
+                  },
+                  "assistantId": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "squadId": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "workflowId": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "customer": {
+                    "type": "object",
+                    "properties": {
+                      "name": {
+                        "type": "string",
+                        "description": "Display name only — a web call is not dialed."
+                      },
+                      "number": {
+                        "type": "string",
+                        "description": "Optional stable customer identity metadata. Never dialed; may be used for phone-keyed Olophin continuity. Prefer E.164."
+                      }
+                    }
+                  },
+                  "firstMessage": {
+                    "type": "string"
+                  },
+                  "content": {
+                    "type": "string"
+                  },
+                  "serverUrl": {
+                    "type": "string",
+                    "format": "uri",
+                    "description": "HTTPS only."
+                  },
+                  "llm": {
+                    "$ref": "#/components/schemas/RuntimeLlmConfig"
+                  },
+                  "tts": {
+                    "$ref": "#/components/schemas/RuntimeTtsConfig"
+                  },
+                  "stt": {
+                    "$ref": "#/components/schemas/RuntimeSttConfig"
+                  },
+                  "conversation": {
+                    "type": "object",
+                    "additionalProperties": true,
+                    "description": "Turn-taking settings."
+                  },
+                  "backgroundAudio": {
+                    "$ref": "#/components/schemas/RuntimeBackgroundAudioConfig"
+                  },
+                  "privacy": {
+                    "type": "object",
+                    "additionalProperties": true,
+                    "description": "Compatibility input; effective recording, HIPAA, and OloGuard values come from the saved assistant policy and cannot be overridden per web call."
+                  },
+                  "predefinedFunctions": {
+                    "type": "object",
+                    "additionalProperties": true,
+                    "description": "Built-in tools."
+                  },
+                  "tools": {
+                    "type": "array",
+                    "items": {
+                      "type": "object"
+                    },
+                    "description": "Inline tools (each `webhookUrl` HTTPS)."
+                  },
+                  "structuredOutputIds": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  "fileIds": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  "extras": {
+                    "type": "object",
+                    "additionalProperties": true
+                  }
+                }
+              },
+              "example": {
+                "organizationId": "00000000-0000-0000-0000-000000000000",
+                "assistantId": "00000000-0000-0000-0000-000000000000",
+                "customer": {
+                  "name": "Kemal"
+                },
+                "firstMessage": "Merhaba, size nasıl yardımcı olabilirim?",
+                "content": "Sen yardımcı bir sesli asistansın.",
+                "llm": {
+                  "provider": "openai",
+                  "model": "gpt-4o"
+                },
+                "tts": {
+                  "provider": "elevenlabs",
+                  "model": "eleven_turbo_v2_5",
+                  "voiceId": "EXAVITQu4vr4xnSDxMaL"
+                },
+                "stt": {
+                  "provider": "deepgram",
+                  "model": "nova-2",
+                  "language": "tr"
+                },
+                "conversation": {},
+                "backgroundAudio": {}
+              }
+            }
+          }
+        }
+      }
+    },
+    "/call-logs": {
+      "get": {
+        "tags": [
+          "Call Logs"
+        ],
+        "summary": "List call logs",
+        "operationId": "listCallLogs",
+        "x-required-scopes": ["call_logs:read"],
+        "description": "Paginated list of your organization's call logs, newest first. Responses are sanitized for API-key access (internal metric fields and the OloGuard PII block are stripped; `toolRuns` is returned). Rate limit: 60 requests / 60 seconds.\n\nOnly `limit`, `page`, and `organizationId` are honored — other filters are ignored.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "A page of call logs.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ListCallLogsResponse"
+                },
+                "example": {
+                  "data": [
+                    {
+                      "id": "95cb8ec7-71ea-4a5a-8fae-145884f2f176",
+                      "callId": "95cb8ec7-71ea-4a5a-8fae-145884f2f176",
+                      "assistantId": "00000000-0000-0000-0000-000000000000",
+                      "assistantName": "Demo Assistant",
+                      "idempotencyKey": null,
+                      "callType": "outbound",
+                      "status": "completed",
+                      "startedAt": "2026-02-07T20:10:01.123Z",
+                      "endedAt": "2026-02-07T20:11:27.123Z",
+                      "endReason": "completed",
+                      "durationSeconds": 86,
+                      "customerName": "Ada Yilmaz",
+                      "customerPhone": "+905551234567",
+                      "organizationPhoneNumber": "+908503078861",
+                      "phoneNumberProvider": "twilio",
+                      "recordingUrl": "https://cdn.example.com/recordings/full.mp3",
+                      "recordingAssistantUrl": null,
+                      "recordingCustomerUrl": null,
+                      "firstMessage": "Hello, this is the assistant calling.",
+                      "mainPrompt": "You are a helpful assistant.",
+                      "serverUrl": "https://example.com/webhook",
+                      "analysisSummary": "The customer was informed and the call ended positively.",
+                      "analysisSuccess": true,
+                      "analysisScore": 92,
+                      "analysisSentiment": "positive",
+                      "analysisStatus": "completed",
+                      "costCurrency": "USD",
+                      "costTotal": 0.14,
+                      "analysis": {
+                        "summary": "The customer was informed and the call ended positively.",
+                        "success": true,
+                        "score": 92,
+                        "sentiment": "positive",
+                        "reasons": null
+                      },
+                      "aiDisclosures": {
+                        "analysisSummary": {
+                          "label": "AI-generated",
+                          "source": "post_call_analysis",
+                          "provider": "openai",
+                          "model": "gpt-4o-mini"
+                        },
+                        "transcript": {
+                          "label": "AI-transcribed",
+                          "source": "speech_to_text",
+                          "provider": "deepgram",
+                          "model": "nova-3"
+                        }
+                      },
+                      "timeline": [],
+                      "toolRuns": [],
+                      "structuredOutputs": [],
+                      "metadata": {},
+                      "payload": null,
+                      "publicPayload": {},
+                      "history": [],
+                      "createdAt": "2026-02-07T20:10:01.123Z",
+                      "updatedAt": "2026-02-07T20:11:33.123Z"
+                    }
+                  ],
+                  "meta": {
+                    "page": 1,
+                    "limit": 25,
+                    "total": 120,
+                    "totalPages": 5
+                  },
+                  "permissions": {
+                    "canManageCallLogs": false
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "examples": {
+                  "unauthorized": {
+                    "summary": "Missing/invalid API key",
+                    "value": {
+                      "error": "Unauthorized"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "examples": {
+                  "forbidden": {
+                    "summary": "organizationId query param does not match the key's org",
+                    "value": {
+                      "error": "Forbidden"
+                    }
+                  },
+                  "orgNotActive": {
+                    "summary": "Organization access_status is not active",
+                    "value": {
+                      "error": "Organization access is not active"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too Many Requests",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "examples": {
+                  "rate": {
+                    "summary": "Rate limit exceeded (Retry-After header set)",
+                    "value": {
+                      "error": "Çok fazla deneme yapıldı. Lütfen kısa bir süre sonra tekrar deneyin."
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "examples": {
+                  "case1": {
+                    "summary": "Database/storage error",
+                    "value": {
+                      "error": "Çağrı kayıtları alınamadı."
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "description": "Records per page. Default 25, min 1, max 100.",
+            "schema": {
+              "type": "integer",
+              "default": 25,
+              "minimum": 1,
+              "maximum": 100
+            }
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "required": false,
+            "description": "1-based page. Default 1, min 1, max 100000.",
+            "schema": {
+              "type": "integer",
+              "default": 1,
+              "minimum": 1,
+              "maximum": 100000
+            }
+          },
+          {
+            "name": "organizationId",
+            "in": "query",
+            "required": false,
+            "description": "Optional. If sent, must equal the API key's organization, else `403 Forbidden`.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ]
+      }
+    },
+    "/call-logs/{callId}": {
+      "get": {
+        "tags": [
+          "Call Logs"
+        ],
+        "summary": "Get call log",
+        "operationId": "getCallLog",
+        "x-required-scopes": ["call_logs:read"],
+        "description": "A single call log by `callId`, in the same sanitized shape as one list element.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The call log.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GetCallLogResponse"
+                },
+                "example": {
+                  "data": {
+                    "id": "95cb8ec7-71ea-4a5a-8fae-145884f2f176",
+                    "callId": "95cb8ec7-71ea-4a5a-8fae-145884f2f176",
+                    "assistantId": "00000000-0000-0000-0000-000000000000",
+                    "assistantName": "Demo Assistant",
+                    "idempotencyKey": null,
+                    "callType": "outbound",
+                    "status": "completed",
+                    "startedAt": "2026-02-07T20:10:01.123Z",
+                    "endedAt": "2026-02-07T20:11:27.123Z",
+                    "endReason": "completed",
+                    "durationSeconds": 86,
+                    "customerName": "Ada Yilmaz",
+                    "customerPhone": "+905551234567",
+                    "organizationPhoneNumber": "+908503078861",
+                    "phoneNumberProvider": "twilio",
+                    "recordingUrl": "https://cdn.example.com/recordings/full.mp3",
+                    "recordingAssistantUrl": null,
+                    "recordingCustomerUrl": null,
+                    "firstMessage": "Hello, this is the assistant calling.",
+                    "mainPrompt": "You are a helpful assistant.",
+                    "serverUrl": "https://example.com/webhook",
+                    "analysisSummary": "The customer was informed and the call ended positively.",
+                    "analysisSuccess": true,
+                    "analysisScore": 92,
+                    "analysisSentiment": "positive",
+                    "analysisStatus": "completed",
+                    "costCurrency": "USD",
+                    "costTotal": 0.14,
+                    "analysis": {
+                      "summary": "The customer was informed and the call ended positively.",
+                      "success": true,
+                      "score": 92,
+                      "sentiment": "positive",
+                      "reasons": null
+                    },
+                    "aiDisclosures": {
+                      "analysisSummary": {
+                        "label": "AI-generated",
+                        "source": "post_call_analysis",
+                        "provider": "openai",
+                        "model": "gpt-4o-mini"
+                      },
+                      "transcript": {
+                        "label": "AI-transcribed",
+                        "source": "speech_to_text",
+                        "provider": "deepgram",
+                        "model": "nova-3"
+                      }
+                    },
+                    "timeline": [],
+                    "toolRuns": [],
+                    "structuredOutputs": [],
+                    "metadata": {},
+                    "payload": null,
+                    "publicPayload": {},
+                    "history": [],
+                    "createdAt": "2026-02-07T20:10:01.123Z",
+                    "updatedAt": "2026-02-07T20:11:33.123Z"
+                  },
+                  "permissions": {
+                    "canManageCallLogs": false
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "examples": {
+                  "case1": {
+                    "summary": "callId path segment is empty",
+                    "value": {
+                      "error": "callId is required"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "examples": {
+                  "unauthorized": {
+                    "summary": "Missing/invalid API key",
+                    "value": {
+                      "error": "Unauthorized"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "examples": {
+                  "case1": {
+                    "summary": "No call log with that callId for the org",
+                    "value": {
+                      "error": "Call log not found"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too Many Requests",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "examples": {
+                  "rate": {
+                    "summary": "Rate limit exceeded (Retry-After header set)",
+                    "value": {
+                      "error": "Çok fazla deneme yapıldı. Lütfen kısa bir süre sonra tekrar deneyin."
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "callId",
+            "in": "path",
+            "required": true,
+            "description": "The call's stable identifier (from `POST /call` → `payload.callId`).",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "organizationId",
+            "in": "query",
+            "required": false,
+            "description": "Optional. If sent, must equal the API key's organization, else `403 Forbidden`.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ]
+      }
+    },
+    "/call-logs/{callId}/recording-url": {
+      "get": {
+        "tags": [
+          "Call Logs"
+        ],
+        "summary": "Refresh recording URL",
+        "operationId": "refreshRecordingUrl",
+        "x-required-scopes": ["recordings:read"],
+        "description": "Mints fresh, short-TTL signed recording URLs on demand. Store the `callId` (not a URL) and call this at playback time. Delivers recording URLs only — never transcript/history. Default TTL 900s.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Freshly signed URLs.",
+            "content": {
+              "application/json": {
+                "example": {
+                  "data": {
+                    "callId": "95cb8ec7-71ea-4a5a-8fae-145884f2f176",
+                    "recordingUrl": "https://storage.olovoice.ai/object/sign/recordings/2026/02/call.mp3?token=REDACTED",
+                    "recordingAssistantUrl": null,
+                    "recordingCustomerUrl": null,
+                    "expiresInSeconds": 900
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "examples": {
+                  "case1": {
+                    "summary": "callId path segment is empty",
+                    "value": {
+                      "error": "callId is required"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "examples": {
+                  "unauthorized": {
+                    "summary": "Missing/invalid API key",
+                    "value": {
+                      "error": "Unauthorized"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "examples": {
+                  "case1": {
+                    "summary": "No call log with that callId for the org",
+                    "value": {
+                      "error": "Call log not found"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "examples": {
+                  "case1": {
+                    "summary": "Storage error while signing",
+                    "value": {
+                      "error": "Kayıt bağlantısı alınamadı."
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "callId",
+            "in": "path",
+            "required": true,
+            "description": "The call's stable identifier.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "organizationId",
+            "in": "query",
+            "required": false,
+            "description": "Optional. If sent, must equal the API key's organization, else `403 Forbidden`.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ]
+      }
+    },
+    "/assistants": {
+      "get": {
+        "tags": [
+          "Assistants"
+        ],
+        "summary": "List assistants",
+        "operationId": "listAssistants",
+        "x-required-scopes": ["assistants:read"],
+        "description": "Lists your organization's assistants, newest first.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The assistants.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ListAssistantsResponse"
+                },
+                "example": {
+                  "success": true,
+                  "assistants": [
+                    {
+                      "id": "00000000-0000-0000-0000-000000000000",
+                      "orgId": "00000000-0000-0000-0000-000000000000",
+                      "name": "Sales Bot",
+                      "slug": "sales-bot",
+                      "status": "published",
+                      "isActive": true,
+                      "createdAt": "2026-07-01T10:00:00.000Z",
+                      "updatedAt": "2026-07-01T10:00:00.000Z",
+                      "firstMessage": "Hello, how can I help you today?",
+                      "content": "You are a helpful sales assistant.",
+                      "serverUrl": "https://example.com/webhook",
+                      "llm": {
+                        "provider": "openai",
+                        "model": "gpt-4o"
+                      },
+                      "tts": {
+                        "provider": "elevenlabs",
+                        "model": null,
+                        "voiceId": "abc123",
+                        "optimizeStreamingLatency": null,
+                        "autoMode": null,
+                        "speed": null,
+                        "volume": null,
+                        "instructions": null
+                      },
+                      "stt": {
+                        "provider": "deepgram",
+                        "model": "nova-2",
+                        "language": "en",
+                        "interimResults": true,
+                        "smartFormat": true,
+                        "optimizationProfile": "balanced",
+                        "keywords": [],
+                        "keyterms": []
+                      },
+                      "conversation": {
+                        "allowInterruptions": true,
+                        "firstMessageMode": "assistantSpeaks",
+                        "mem0Enabled": true,
+                        "rulesEnabled": false,
+                        "handoffEnabled": false,
+                        "handoffNumber": null
+                      },
+                      "backgroundAudio": {
+                        "ambient": null,
+                        "thinking": null
+                      },
+                      "privacy": {
+                        "hipaaCompliant": false,
+                        "recordCalls": false,
+                        "ologuardEnabled": false,
+                        "message": null,
+                        "serverUrl": null
+                      },
+                      "predefinedFunctions": {
+                        "enableEndCallFunction": false,
+                        "enableDialKeypad": false,
+                        "enableDtmfCapture": false,
+                        "endCallMessages": []
+                      },
+                      "toolIds": [],
+                      "structuredOutputIds": [],
+                      "knowledgeFileIds": [],
+                      "folderId": null,
+                      "usePronunciationLibrary": false,
+                      "pronunciationLibraryId": null
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "examples": {
+                  "unauthorized": {
+                    "summary": "Missing/invalid API key",
+                    "value": {
+                      "error": "Unauthorized"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too Many Requests",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "examples": {
+                  "case1": {
+                    "summary": "Rate limit (60/min)",
+                    "value": {
+                      "error": "Too Many Requests"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "examples": {
+                  "case1": {
+                    "summary": "List query failed",
+                    "value": {
+                      "error": "Failed to list assistants"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "description": "Max assistants. Clamped to [1, 20]; default 20.",
+            "schema": {
+              "type": "integer",
+              "default": 20,
+              "minimum": 1,
+              "maximum": 20
+            }
+          }
+        ]
+      },
+      "post": {
+        "tags": [
+          "Assistants"
+        ],
+        "summary": "Create assistant",
+        "operationId": "createAssistant",
+        "x-required-scopes": ["assistants:write"],
+        "description": "Creates an assistant and returns the fully-mapped record. A unique `slug` is generated from `name`.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": "Assistant created.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CreateAssistantResponse"
+                },
+                "example": {
+                  "success": true,
+                  "assistant": {
+                    "id": "00000000-0000-0000-0000-000000000000",
+                    "orgId": "00000000-0000-0000-0000-000000000000",
+                    "name": "Sales Bot",
+                    "slug": "sales-bot",
+                    "status": "published",
+                    "isActive": true,
+                    "createdAt": "2026-07-01T10:00:00.000Z",
+                    "updatedAt": "2026-07-01T10:00:00.000Z",
+                    "firstMessage": "Hello, how can I help you today?",
+                    "content": "You are a helpful sales assistant.",
+                    "serverUrl": "https://example.com/webhook",
+                    "llm": {
+                      "provider": "openai",
+                      "model": "gpt-4o"
+                    },
+                    "tts": {
+                      "provider": "elevenlabs",
+                      "model": null,
+                      "voiceId": "abc123",
+                      "optimizeStreamingLatency": null,
+                      "autoMode": null,
+                      "speed": null,
+                      "volume": null,
+                      "instructions": null
+                    },
+                    "stt": {
+                      "provider": "deepgram",
+                      "model": "nova-2",
+                      "language": "en",
+                      "interimResults": true,
+                      "smartFormat": true,
+                      "optimizationProfile": "balanced",
+                      "keywords": [],
+                      "keyterms": []
+                    },
+                    "conversation": {
+                      "allowInterruptions": true,
+                      "firstMessageMode": "assistantSpeaks",
+                      "mem0Enabled": true,
+                      "rulesEnabled": false,
+                      "handoffEnabled": false,
+                      "handoffNumber": null
+                    },
+                    "backgroundAudio": {
+                      "ambient": null,
+                      "thinking": null
+                    },
+                    "privacy": {
+                      "hipaaCompliant": false,
+                      "recordCalls": false,
+                      "ologuardEnabled": false,
+                      "message": null,
+                      "serverUrl": null
+                    },
+                    "predefinedFunctions": {
+                      "enableEndCallFunction": false,
+                      "enableDialKeypad": false,
+                      "enableDtmfCapture": false,
+                      "endCallMessages": []
+                    },
+                    "toolIds": [],
+                    "structuredOutputIds": [],
+                    "knowledgeFileIds": [],
+                    "folderId": null,
+                    "usePronunciationLibrary": false,
+                    "pronunciationLibraryId": null
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "examples": {
+                  "name": {
+                    "summary": "Missing name",
+                    "value": {
+                      "error": "name is required"
+                    }
+                  },
+                  "https": {
+                    "summary": "Non-HTTPS serverUrl",
+                    "value": {
+                      "error": "serverUrl yalnızca HTTPS olmalıdır."
+                    }
+                  },
+                  "toolIds": {
+                    "summary": "Unknown toolIds",
+                    "value": {
+                      "error": "Invalid toolIds",
+                      "missing": [
+                        "tool_abc"
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "examples": {
+                  "unauthorized": {
+                    "summary": "Missing/invalid API key",
+                    "value": {
+                      "error": "Unauthorized"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "name"
+                ],
+                "description": "All fields camelCase. `status` is `draft` or `published` (anything else coerces to `draft`).",
+                "properties": {
+                  "name": {
+                    "type": "string",
+                    "description": "Required, non-empty."
+                  },
+                  "status": {
+                    "type": "string",
+                    "enum": [
+                      "draft",
+                      "published"
+                    ],
+                    "default": "draft"
+                  },
+                  "firstMessage": {
+                    "type": "string"
+                  },
+                  "content": {
+                    "type": "string",
+                    "description": "System prompt (aka mainPrompt)."
+                  },
+                  "isActive": {
+                    "type": "boolean",
+                    "description": "Defaults to `status === \"published\"`."
+                  },
+                  "serverUrl": {
+                    "type": "string",
+                    "format": "uri",
+                    "description": "HTTPS webhook."
+                  },
+                  "folderId": {
+                    "type": "string",
+                    "nullable": true
+                  },
+                  "llm": {
+                    "type": "object",
+                    "additionalProperties": true,
+                    "description": "LLM settings."
+                  },
+                  "tts": {
+                    "type": "object",
+                    "additionalProperties": true,
+                    "description": "TTS settings (aka `voice`)."
+                  },
+                  "stt": {
+                    "$ref": "#/components/schemas/AssistantSttSettingsInput"
+                  },
+                  "conversation": {
+                    "type": "object",
+                    "additionalProperties": true,
+                    "description": "Conversation settings, including `mem0Enabled` and OloFocus fields: `noiseCancellationMode`, `oloFocusModel`, `oloFocusEnhancementLevel`, `vadProvider`, and noisy-environment warning controls."
+                  },
+                  "backgroundAudio": {
+                    "$ref": "#/components/schemas/AssistantBackgroundAudioInput"
+                  },
+                  "privacy": {
+                    "type": "object",
+                    "additionalProperties": true,
+                    "description": "Authoritative assistant recording, HIPAA, and OloGuard policy. `ologuardEnabled` is preserved on update if omitted."
+                  },
+                  "predefinedFunctions": {
+                    "type": "object",
+                    "additionalProperties": true,
+                    "description": "Built-in tools."
+                  },
+                  "toolIds": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  "structuredOutputIds": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  "knowledgeFileIds": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  "usePronunciationLibrary": {
+                    "type": "boolean"
+                  },
+                  "pronunciationLibraryId": {
+                    "type": "string",
+                    "nullable": true,
+                    "description": "Required if `usePronunciationLibrary` is true; needs `tts.provider = elevenlabs`."
+                  }
+                }
+              },
+              "example": {
+                "name": "Sales Bot",
+                "status": "published",
+                "firstMessage": "Hello, how can I help you today?",
+                "content": "You are a helpful sales assistant for Acme Corp.",
+                "isActive": true,
+                "serverUrl": "https://example.com/webhook",
+                "llm": {
+                  "provider": "openai",
+                  "model": "gpt-4o",
+                  "temperature": 0.7
+                },
+                "tts": {
+                  "provider": "elevenlabs",
+                  "voiceId": "abc123",
+                  "speed": 1
+                },
+                "stt": {
+                  "provider": "deepgram",
+                  "model": "nova-2",
+                  "language": "en",
+                  "interimResults": true,
+                  "smartFormat": true
+                },
+                "conversation": {
+                  "allowInterruptions": true,
+                  "preemptiveGeneration": false,
+                  "firstMessageMode": "assistantSpeaks"
+                },
+                "privacy": {
+                  "recordCalls": false,
+                  "hipaaCompliant": false
+                },
+                "predefinedFunctions": {
+                  "enableEndCallFunction": true,
+                  "endCallMessages": [
+                    "Goodbye!"
+                  ]
+                },
+                "toolIds": [],
+                "structuredOutputIds": [],
+                "knowledgeFileIds": [],
+                "usePronunciationLibrary": false,
+                "pronunciationLibraryId": null
+              }
+            }
+          }
+        }
+      }
+    },
+    "/assistants/{assistantId}": {
+      "get": {
+        "tags": [
+          "Assistants"
+        ],
+        "summary": "Get assistant",
+        "operationId": "getAssistant",
+        "x-required-scopes": ["assistants:read"],
+        "description": "Fetches a single assistant by id, scoped to your org.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The assistant.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GetAssistantResponse"
+                },
+                "example": {
+                  "success": true,
+                  "assistant": {
+                    "id": "00000000-0000-0000-0000-000000000000",
+                    "orgId": "00000000-0000-0000-0000-000000000000",
+                    "name": "Sales Bot",
+                    "slug": "sales-bot",
+                    "status": "published",
+                    "isActive": true,
+                    "createdAt": "2026-07-01T10:00:00.000Z",
+                    "updatedAt": "2026-07-01T10:00:00.000Z",
+                    "firstMessage": "Hello, how can I help you today?",
+                    "content": "You are a helpful sales assistant.",
+                    "serverUrl": "https://example.com/webhook",
+                    "llm": {
+                      "provider": "openai",
+                      "model": "gpt-4o"
+                    },
+                    "tts": {
+                      "provider": "elevenlabs",
+                      "model": null,
+                      "voiceId": "abc123",
+                      "optimizeStreamingLatency": null,
+                      "autoMode": null,
+                      "speed": null,
+                      "volume": null,
+                      "instructions": null
+                    },
+                    "stt": {
+                      "provider": "deepgram",
+                      "model": "nova-2",
+                      "language": "en",
+                      "interimResults": true,
+                      "smartFormat": true,
+                      "optimizationProfile": "balanced",
+                      "keywords": [],
+                      "keyterms": []
+                    },
+                    "conversation": {
+                      "allowInterruptions": true,
+                      "firstMessageMode": "assistantSpeaks",
+                      "mem0Enabled": true,
+                      "rulesEnabled": false,
+                      "handoffEnabled": false,
+                      "handoffNumber": null
+                    },
+                    "backgroundAudio": {
+                      "ambient": null,
+                      "thinking": null
+                    },
+                    "privacy": {
+                      "hipaaCompliant": false,
+                      "recordCalls": false,
+                      "ologuardEnabled": false,
+                      "message": null,
+                      "serverUrl": null
+                    },
+                    "predefinedFunctions": {
+                      "enableEndCallFunction": false,
+                      "enableDialKeypad": false,
+                      "enableDtmfCapture": false,
+                      "endCallMessages": []
+                    },
+                    "toolIds": [],
+                    "structuredOutputIds": [],
+                    "knowledgeFileIds": [],
+                    "folderId": null,
+                    "usePronunciationLibrary": false,
+                    "pronunciationLibraryId": null
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "examples": {
+                  "unauthorized": {
+                    "summary": "Missing/invalid API key",
+                    "value": {
+                      "error": "Unauthorized"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "examples": {
+                  "case1": {
+                    "summary": "Not found in this org",
+                    "value": {
+                      "error": "Assistant not found"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "assistantId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ]
+      },
+      "patch": {
+        "tags": [
+          "Assistants"
+        ],
+        "summary": "Update assistant",
+        "operationId": "updateAssistant",
+        "x-required-scopes": ["assistants:write"],
+        "description": "Partial update. Only top-level keys present are changed. Nested config objects are FULLY REPLACED (not merged) — except `privacy.ologuardEnabled`, preserved if omitted. Empty body → `400 No fields to update`.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Updated assistant.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UpdateAssistantResponse"
+                },
+                "example": {
+                  "success": true,
+                  "assistant": {
+                    "id": "00000000-0000-0000-0000-000000000000",
+                    "orgId": "00000000-0000-0000-0000-000000000000",
+                    "name": "Sales Bot v2",
+                    "slug": "sales-bot",
+                    "status": "published",
+                    "isActive": true,
+                    "createdAt": "2026-07-01T10:00:00.000Z",
+                    "updatedAt": "2026-07-01T10:00:00.000Z",
+                    "firstMessage": "Hello, how can I help you today?",
+                    "content": "You are a helpful sales assistant.",
+                    "serverUrl": "https://example.com/webhook",
+                    "llm": {
+                      "provider": "openai",
+                      "model": "gpt-4o"
+                    },
+                    "tts": {
+                      "provider": "elevenlabs",
+                      "model": null,
+                      "voiceId": "abc123",
+                      "optimizeStreamingLatency": null,
+                      "autoMode": null,
+                      "speed": null,
+                      "volume": null,
+                      "instructions": null
+                    },
+                    "stt": {
+                      "provider": "deepgram",
+                      "model": "nova-2",
+                      "language": "en",
+                      "interimResults": true,
+                      "smartFormat": true,
+                      "optimizationProfile": "balanced",
+                      "keywords": [],
+                      "keyterms": []
+                    },
+                    "conversation": {
+                      "allowInterruptions": true,
+                      "firstMessageMode": "assistantSpeaks",
+                      "mem0Enabled": true,
+                      "rulesEnabled": false,
+                      "handoffEnabled": false,
+                      "handoffNumber": null
+                    },
+                    "backgroundAudio": {
+                      "ambient": null,
+                      "thinking": null
+                    },
+                    "privacy": {
+                      "hipaaCompliant": false,
+                      "recordCalls": true,
+                      "ologuardEnabled": false,
+                      "message": null,
+                      "serverUrl": null
+                    },
+                    "predefinedFunctions": {
+                      "enableEndCallFunction": false,
+                      "enableDialKeypad": false,
+                      "enableDtmfCapture": false,
+                      "endCallMessages": []
+                    },
+                    "toolIds": [
+                      "00000000-0000-0000-0000-000000000000"
+                    ],
+                    "structuredOutputIds": [],
+                    "knowledgeFileIds": [],
+                    "folderId": null,
+                    "usePronunciationLibrary": false,
+                    "pronunciationLibraryId": null
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "examples": {
+                  "noop": {
+                    "summary": "Empty / no-op body",
+                    "value": {
+                      "error": "No fields to update"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "examples": {
+                  "unauthorized": {
+                    "summary": "Missing/invalid API key",
+                    "value": {
+                      "error": "Unauthorized"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "examples": {
+                  "case1": {
+                    "summary": "Not found in this org",
+                    "value": {
+                      "error": "Assistant not found"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "assistantId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "minProperties": 1,
+                "description": "Partial update — only the top-level keys present are changed. Nested config objects are FULLY REPLACED (not deep-merged), except `privacy.ologuardEnabled` which is preserved if omitted. An empty body returns `400 No fields to update`.",
+                "properties": {
+                  "name": {
+                    "type": "string",
+                    "description": "Required, non-empty."
+                  },
+                  "status": {
+                    "type": "string",
+                    "enum": [
+                      "draft",
+                      "published"
+                    ],
+                    "default": "draft"
+                  },
+                  "firstMessage": {
+                    "type": ["string", "null"],
+                    "description": "Opening line. Send `null` to clear it."
+                  },
+                  "content": {
+                    "type": ["string", "null"],
+                    "description": "System prompt (aka mainPrompt). Send `null` to clear it."
+                  },
+                  "isActive": {
+                    "type": "boolean",
+                    "description": "Defaults to `status === \"published\"`."
+                  },
+                  "serverUrl": {
+                    "type": ["string", "null"],
+                    "format": "uri",
+                    "description": "HTTPS webhook. Send `null` to clear it."
+                  },
+                  "folderId": {
+                    "type": "string",
+                    "nullable": true
+                  },
+                  "llm": {
+                    "type": "object",
+                    "additionalProperties": true,
+                    "description": "LLM settings."
+                  },
+                  "tts": {
+                    "type": "object",
+                    "additionalProperties": true,
+                    "description": "TTS settings (aka `voice`)."
+                  },
+                  "stt": {
+                    "$ref": "#/components/schemas/AssistantSttSettingsInput"
+                  },
+                  "conversation": {
+                    "type": "object",
+                    "additionalProperties": true,
+                    "description": "Conversation settings, including `mem0Enabled` and OloFocus fields: `noiseCancellationMode`, `oloFocusModel`, `oloFocusEnhancementLevel`, `vadProvider`, and noisy-environment warning controls."
+                  },
+                  "backgroundAudio": {
+                    "$ref": "#/components/schemas/AssistantBackgroundAudioInput"
+                  },
+                  "privacy": {
+                    "type": "object",
+                    "additionalProperties": true,
+                    "description": "Authoritative assistant recording, HIPAA, and OloGuard policy. `ologuardEnabled` is preserved on update if omitted."
+                  },
+                  "predefinedFunctions": {
+                    "type": "object",
+                    "additionalProperties": true,
+                    "description": "Built-in tools."
+                  },
+                  "toolIds": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  "structuredOutputIds": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  "knowledgeFileIds": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  "usePronunciationLibrary": {
+                    "type": "boolean"
+                  },
+                  "pronunciationLibraryId": {
+                    "type": "string",
+                    "nullable": true,
+                    "description": "Required if `usePronunciationLibrary` is true; needs `tts.provider = elevenlabs`."
+                  }
+                }
+              },
+              "example": {
+                "name": "Sales Bot v2",
+                "status": "published",
+                "firstMessage": "Hi! Thanks for calling Acme.",
+                "content": "You are an upgraded sales assistant.",
+                "isActive": true,
+                "serverUrl": "https://example.com/webhook-v2",
+                "llm": {
+                  "provider": "openai",
+                  "model": "gpt-4o"
+                },
+                "tts": {
+                  "provider": "elevenlabs",
+                  "voiceId": "xyz789"
+                },
+                "privacy": {
+                  "recordCalls": true
+                },
+                "toolIds": [
+                  "00000000-0000-0000-0000-000000000000"
+                ]
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "Assistants"
+        ],
+        "summary": "Delete assistant",
+        "operationId": "deleteAssistant",
+        "x-required-scopes": ["assistants:write"],
+        "description": "Permanently deletes an assistant owned by your org. Existing call logs are kept.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Deleted.",
+            "content": {
+              "application/json": {
+                "example": {
+                  "success": true
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "examples": {
+                  "unauthorized": {
+                    "summary": "Missing/invalid API key",
+                    "value": {
+                      "error": "Unauthorized"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "examples": {
+                  "case1": {
+                    "summary": "Not found in this org",
+                    "value": {
+                      "error": "Assistant not found"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "assistantId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ]
+      }
+    },
+    "/leads": {
+      "post": {
+        "tags": [
+          "Leads"
+        ],
+        "summary": "Create lead",
+        "operationId": "createLead",
+        "x-required-scopes": ["leads:write"],
+        "description": "Creates a lead and optionally triggers an outbound call. The organization is derived from the API key. Requires the **Lead Management** package. `call.status` is `called` | `queued` | `skipped` | `failed`. Response keys are snake_case (`lead_id`).",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Lead created.",
+            "content": {
+              "application/json": {
+                "example": {
+                  "success": true,
+                  "lead_id": "3f9a2c8e-1b7d-4e2a-9c1f-2a4b6d8e0f11",
+                  "call": {
+                    "status": "called"
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "examples": {
+                  "required": {
+                    "summary": "name or phone missing",
+                    "value": {
+                      "error": "phone is required"
+                    }
+                  },
+                  "json": {
+                    "summary": "Body is not valid JSON",
+                    "value": {
+                      "error": "Invalid JSON"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "examples": {
+                  "unauthorized": {
+                    "summary": "Missing/invalid API key",
+                    "value": {
+                      "error": "Unauthorized"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "examples": {
+                  "package": {
+                    "summary": "Lead Management package not active",
+                    "value": {
+                      "error": "Lead yönetimi paketi aktif değil."
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "name",
+                  "phone"
+                ],
+                "properties": {
+                  "name": {
+                    "type": "string",
+                    "description": "Required, non-empty after trim."
+                  },
+                  "phone": {
+                    "type": "string",
+                    "description": "Required, non-empty after trim.",
+                    "example": "+905551112233"
+                  },
+                  "email": {
+                    "type": "string",
+                    "format": "email"
+                  },
+                  "metadata": {
+                    "type": "object",
+                    "additionalProperties": true,
+                    "description": "Free-form. Exposed to the prompt as `{{lead_<key>}}` (keys must match `^[a-zA-Z0-9_]+$`)."
+                  },
+                  "categoryId": {
+                    "type": "string",
+                    "description": "If the category has both an assistant and phone number, an outbound call is placed automatically."
+                  },
+                  "campaignId": {
+                    "type": "string",
+                    "description": "Links the lead into a campaign. Unknown IDs soft-warn."
+                  }
+                }
+              },
+              "example": {
+                "name": "Jane Doe",
+                "phone": "+905551112233",
+                "email": "lead@example.com",
+                "categoryId": "00000000-0000-0000-0000-000000000000",
+                "campaignId": "00000000-0000-0000-0000-000000000000",
+                "metadata": {
+                  "source": "website-form",
+                  "plan": "pro"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/metrics": {
+      "get": {
+        "tags": [
+          "Metrics"
+        ],
+        "summary": "Get metrics",
+        "operationId": "getMetrics",
+        "x-required-scopes": ["metrics:read"],
+        "description": "Aggregated call analytics over a date range: summary, daily trends, hourly activity, duration distribution, disconnect reasons, sentiment, funnel, top assistants, and tool usage. Latency values are in milliseconds.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Aggregated metrics.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MetricsResponse"
+                },
+                "example": {
+                  "summary": {
+                    "totalCalls": 128,
+                    "totalDuration": 15420,
+                    "totalCost": 42.75,
+                    "successRate": 71.4,
+                    "analysisCoverage": 87.5,
+                    "answeredRate": 82,
+                    "answeredCalls": 105,
+                    "analyzedCalls": 112,
+                    "pendingAnalysisCalls": 16,
+                    "ruleCompliance": 88.2,
+                    "totalInputTokens": 214500,
+                    "totalOutputTokens": 63120,
+                    "avgLatencyMs": 912,
+                    "latencyBreakdown": {
+                      "avgTurnEndDelayMs": 180,
+                      "avgLlmTtftMs": 540,
+                      "avgRealtimeTtftMs": 0,
+                      "avgTtsTtfbMs": 190,
+                      "avgPlaybackLatencyMs": 0,
+                      "avgTotalLatencyMs": 912,
+                      "sampleCount": 112,
+                      "dominantSource": "llm",
+                      "dominantLabel": "LLM ilk token"
+                    },
+                    "currency": "TRY",
+                    "rules": {
+                      "passed": 240,
+                      "partial": 18,
+                      "failed": 30,
+                      "checked": 288
+                    }
+                  },
+                  "trends": [
+                    {
+                      "date": "2026-01-01",
+                      "calls": 12,
+                      "cost": 3.9,
+                      "success": 8,
+                      "successAnalyzed": 8,
+                      "analyzed": 10,
+                      "inputTokens": 18200,
+                      "outputTokens": 5300,
+                      "avgLatency": 905,
+                      "avgLatencyMs": 9955,
+                      "latencySampleCount": 11,
+                      "latencyBreakdown": {
+                        "avgTurnEndDelayMs": 175,
+                        "avgLlmTtftMs": 535,
+                        "avgRealtimeTtftMs": 0,
+                        "avgTtsTtfbMs": 185,
+                        "avgPlaybackLatencyMs": 0,
+                        "avgTotalLatencyMs": 905,
+                        "sampleCount": 11,
+                        "dominantSource": "llm",
+                        "dominantLabel": "LLM ilk token"
+                      },
+                      "successRate": 80
+                    }
+                  ],
+                  "hourlyActivity": [
+                    {
+                      "hour": 0,
+                      "calls": 0
+                    },
+                    {
+                      "hour": 9,
+                      "calls": 14
+                    }
+                  ],
+                  "durationDistribution": [
+                    {
+                      "range": "0-1 dk",
+                      "count": 40
+                    },
+                    {
+                      "range": "1-3 dk",
+                      "count": 55
+                    },
+                    {
+                      "range": "3-5 dk",
+                      "count": 20
+                    },
+                    {
+                      "range": "5+ dk",
+                      "count": 13
+                    }
+                  ],
+                  "disconnectReasons": [
+                    {
+                      "reason": "Müşteri Kapattı",
+                      "count": 61
+                    },
+                    {
+                      "reason": "Cevap Yok",
+                      "count": 22
+                    }
+                  ],
+                  "sentimentAnalysis": [
+                    {
+                      "name": "Pozitif",
+                      "value": 70,
+                      "color": "#10b981"
+                    },
+                    {
+                      "name": "Nötr",
+                      "value": 33,
+                      "color": "#6b7280"
+                    },
+                    {
+                      "name": "Negatif",
+                      "value": 9,
+                      "color": "#f43f5e"
+                    }
+                  ],
+                  "funnel": {
+                    "initiated": 128,
+                    "answered": 105,
+                    "success": 80
+                  },
+                  "topAssistants": [
+                    {
+                      "id": "00000000-0000-0000-0000-000000000000",
+                      "name": "Sales Bot",
+                      "calls": 74,
+                      "answeredRate": 83.8,
+                      "analysisCoverage": 90.5,
+                      "successRate": 72,
+                      "avgDuration": 121.4,
+                      "totalCost": 24.6,
+                      "avgCost": 0.33,
+                      "totalInputTokens": 132000,
+                      "totalOutputTokens": 38900,
+                      "avgLatency": 898,
+                      "latencyBreakdown": {
+                        "avgTurnEndDelayMs": 172,
+                        "avgLlmTtftMs": 528,
+                        "avgRealtimeTtftMs": 0,
+                        "avgTtsTtfbMs": 182,
+                        "avgPlaybackLatencyMs": 0,
+                        "avgTotalLatencyMs": 898,
+                        "sampleCount": 67,
+                        "dominantSource": "llm",
+                        "dominantLabel": "LLM ilk token"
+                      },
+                      "ruleCompliance": 89.1
+                    }
+                  ],
+                  "toolUsage": [
+                    {
+                      "name": "book_appointment",
+                      "count": 41,
+                      "success": 38,
+                      "fail": 3
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "examples": {
+                  "custom": {
+                    "summary": "range=custom without valid startDate/endDate",
+                    "value": {
+                      "error": "Custom tarih aralığı için startDate ve endDate (YYYY-MM-DD) zorunludur."
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "examples": {
+                  "unauthorized": {
+                    "summary": "Missing/invalid API key",
+                    "value": {
+                      "error": "Unauthorized"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "examples": {
+                  "forbidden": {
+                    "summary": "organizationId mismatch",
+                    "value": {
+                      "error": "Forbidden"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "range",
+            "in": "query",
+            "required": false,
+            "description": "7d (default), 30d/last_30, 90d/last_90, 180d/last_180, 365d/last_365, or custom.",
+            "schema": {
+              "type": "string",
+              "default": "7d",
+              "enum": [
+                "7d",
+                "30d",
+                "90d",
+                "180d",
+                "365d",
+                "custom"
+              ]
+            }
+          },
+          {
+            "name": "startDate",
+            "in": "query",
+            "required": false,
+            "description": "YYYY-MM-DD. Required only when range=custom.",
+            "schema": {
+              "type": "string",
+              "format": "date"
+            }
+          },
+          {
+            "name": "endDate",
+            "in": "query",
+            "required": false,
+            "description": "YYYY-MM-DD (end-of-day UTC). Required only when range=custom.",
+            "schema": {
+              "type": "string",
+              "format": "date"
+            }
+          },
+          {
+            "name": "assistantId",
+            "in": "query",
+            "required": false,
+            "description": "Filter to one assistant. `all` == no filter.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "organizationId",
+            "in": "query",
+            "required": false,
+            "description": "Optional. If sent, must equal the API key's organization, else `403 Forbidden`.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ]
+      }
+    }
+  },
+  "components": {
+    "securitySchemes": {
+      "bearerAuth": {
+        "type": "http",
+        "scheme": "bearer",
+        "bearerFormat": "API Key",
+        "description": "Send `Authorization: Bearer YOUR_API_KEY`. Each operation declares its API-key scope in `x-required-scopes`."
+      }
+    },
+    "schemas": {
+      "Error": {
+        "type": "object",
+        "properties": {
+          "error": {
+            "type": "string",
+            "description": "Human-readable error message."
+          }
+        },
+        "required": [
+          "error"
+        ],
+        "description": "Standard error shape for /call-logs, /assistants, /leads, /metrics."
+      },
+      "ErrorWithSuccess": {
+        "type": "object",
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "example": false
+          },
+          "error": {
+            "type": "string"
+          },
+          "detail": {
+            "type": "string"
+          },
+          "code": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "error"
+        ],
+        "description": "Error shape for /call and /web-call (includes `success: false`)."
+      },
+      "RuntimeLlmConfig": {
+        "type": "object",
+        "description": "Runtime LLM settings. `provider` and `model` are required so an accepted dispatch can initialize the worker.",
+        "properties": {
+          "provider": {
+            "type": "string",
+            "enum": ["openai", "openai-realtime", "openai_realtime", "openai.realtime", "google", "gemini", "anthropic", "aws", "amazon", "bedrock", "groq", "groq.ai", "groqai", "qwen"]
+          },
+          "model": { "type": "string", "minLength": 1 },
+          "realtimeMode": { "type": "string", "enum": ["halfCascade", "nativeAudio"] }
+        },
+        "required": ["provider", "model"],
+        "additionalProperties": true
+      },
+      "RuntimeTtsConfig": {
+        "type": "object",
+        "description": "Runtime TTS settings. `provider` is always required when this field is supplied. ElevenLabs/OpenAI require `model` and `voiceId`; AWS Polly requires `voiceId` and defaults `model` to `polly-neural`; Freya/Nova provide model and voice defaults. On `/call`, the whole field may be omitted only for OpenAI realtime native-audio; `/web-call` may omit it and hydrate the saved assistant config.",
+        "properties": {
+          "provider": {
+            "type": "string",
+            "enum": ["aws", "amazon", "elevenlabs", "eleven", "freya", "freyavoice", "nova", "novaforge", "nova-tts", "openai", "polly"]
+          },
+          "model": { "type": ["string", "null"] },
+          "voiceId": { "type": ["string", "null"] }
+        },
+        "required": ["provider"],
+        "allOf": [
+          {
+            "if": {
+              "properties": {
+                "provider": { "enum": ["aws", "amazon", "polly"] }
+              },
+              "required": ["provider"]
+            },
+            "then": {
+              "required": ["voiceId"],
+              "properties": {
+                "voiceId": { "type": "string", "minLength": 1 },
+                "model": {
+                  "enum": [null, "standard", "polly-standard", "neural", "polly-neural", "generative", "polly-generative", "long-form", "longform", "polly-long-form"]
+                }
+              }
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "provider": { "enum": ["elevenlabs", "eleven", "openai"] }
+              },
+              "required": ["provider"]
+            },
+            "then": {
+              "required": ["model", "voiceId"],
+              "properties": {
+                "model": { "type": "string", "minLength": 1 },
+                "voiceId": { "type": "string", "minLength": 1 }
+              }
+            }
+          }
+        ],
+        "additionalProperties": true
+      },
+      "RuntimeSttConfig": {
+        "type": "object",
+        "description": "Runtime STT override. It is additive-merged with the stored assistant STT settings, so a providerless partial override such as `{ language: \"tr\" }` is valid. Runtime calls may use string or object keyword entries.",
+        "properties": {
+          "provider": {
+            "type": "string",
+            "enum": ["azure", "azure_speech", "azure-speech", "aws", "amazon", "transcribe", "transcribe-streaming", "deepgram", "dg", "elevenlabs", "eleven", "eleven-labs", "freya", "freyavoice", "groq", "groq.ai", "groqai", "nova", "novaforge", "nova-stt", "openai", "whisper"]
+          }
+        },
+        "additionalProperties": true
+      },
+      "RuntimeBackgroundAudioConfig": {
+        "type": "object",
+        "description": "Runtime background audio. Required on `/call`; may be `{}`. Runtime ambient/thinking values may be builtin strings or provider objects.",
+        "additionalProperties": true
+      },
+      "OpenAiRealtimeLlm": {
+        "type": "object",
+        "description": "An LLM configuration that the server normalizes as OpenAI realtime.",
+        "properties": {
+          "realtimeMode": {
+            "type": "string",
+            "enum": ["halfCascade", "nativeAudio"],
+            "description": "Defaults to halfCascade for recognized realtime providers/models. nativeAudio also requires the server-side OPENAI_REALTIME_NATIVE_AUDIO_ENABLED rollout flag."
+          }
+        },
+        "anyOf": [
+          {
+            "properties": {
+              "provider": {
+                "enum": ["openai-realtime", "openai_realtime", "openai.realtime"]
+              },
+              "model": { "type": "string", "minLength": 1 }
+            },
+            "required": ["provider", "model"]
+          },
+          {
+            "properties": {
+              "provider": { "const": "openai" },
+              "model": {
+                "enum": ["gpt-realtime", "gpt-realtime-1.5", "gpt-realtime-2"]
+              }
+            },
+            "required": ["provider", "model"]
+          }
+        ]
+      },
+      "MetricsLatencyBreakdown": {
+        "type": "object",
+        "properties": {
+          "avgTurnEndDelayMs": { "type": "number", "minimum": 0 },
+          "avgLlmTtftMs": { "type": "number", "minimum": 0 },
+          "avgRealtimeTtftMs": { "type": "number", "minimum": 0 },
+          "avgTtsTtfbMs": { "type": "number", "minimum": 0 },
+          "avgPlaybackLatencyMs": { "type": "number", "minimum": 0 },
+          "avgTotalLatencyMs": { "type": "number", "minimum": 0 },
+          "sampleCount": { "type": "integer", "minimum": 0 },
+          "dominantSource": { "type": "string" },
+          "dominantLabel": { "type": "string" }
+        },
+        "required": ["avgTurnEndDelayMs", "avgLlmTtftMs", "avgRealtimeTtftMs", "avgTtsTtfbMs", "avgPlaybackLatencyMs", "avgTotalLatencyMs", "sampleCount", "dominantSource", "dominantLabel"],
+        "additionalProperties": false
+      },
+      "MetricsRuleCounts": {
+        "type": "object",
+        "properties": {
+          "passed": { "type": "integer", "minimum": 0 },
+          "partial": { "type": "integer", "minimum": 0 },
+          "failed": { "type": "integer", "minimum": 0 },
+          "checked": { "type": "integer", "minimum": 0 }
+        },
+        "required": ["passed", "partial", "failed", "checked"],
+        "additionalProperties": false
+      },
+      "MetricsSummary": {
+        "type": "object",
+        "properties": {
+          "totalCalls": { "type": "integer", "minimum": 0 },
+          "totalDuration": { "type": "number", "minimum": 0 },
+          "totalCost": { "type": "number", "minimum": 0 },
+          "successRate": { "type": "number", "minimum": 0, "maximum": 100 },
+          "analysisCoverage": { "type": "number", "minimum": 0, "maximum": 100 },
+          "answeredRate": { "type": "number", "minimum": 0, "maximum": 100 },
+          "answeredCalls": { "type": "integer", "minimum": 0 },
+          "analyzedCalls": { "type": "integer", "minimum": 0 },
+          "pendingAnalysisCalls": { "type": "integer", "minimum": 0 },
+          "ruleCompliance": { "type": "number", "minimum": 0, "maximum": 100 },
+          "totalInputTokens": { "type": "number", "minimum": 0 },
+          "totalOutputTokens": { "type": "number", "minimum": 0 },
+          "avgLatencyMs": { "type": "number", "minimum": 0 },
+          "latencyBreakdown": { "$ref": "#/components/schemas/MetricsLatencyBreakdown" },
+          "currency": { "type": ["string", "null"] },
+          "rules": { "$ref": "#/components/schemas/MetricsRuleCounts" }
+        },
+        "required": ["totalCalls", "totalDuration", "totalCost", "successRate", "analysisCoverage", "answeredRate", "answeredCalls", "analyzedCalls", "pendingAnalysisCalls", "ruleCompliance", "totalInputTokens", "totalOutputTokens", "avgLatencyMs", "latencyBreakdown", "currency", "rules"],
+        "additionalProperties": false
+      },
+      "MetricsTrend": {
+        "type": "object",
+        "properties": {
+          "date": { "type": "string", "format": "date" },
+          "calls": { "type": "integer", "minimum": 0 },
+          "cost": { "type": "number", "minimum": 0 },
+          "success": { "type": "integer", "minimum": 0 },
+          "successAnalyzed": { "type": "integer", "minimum": 0 },
+          "analyzed": { "type": "integer", "minimum": 0 },
+          "inputTokens": { "type": "number", "minimum": 0 },
+          "outputTokens": { "type": "number", "minimum": 0 },
+          "avgLatencyMs": { "type": "number", "minimum": 0 },
+          "latencySampleCount": { "type": "integer", "minimum": 0 },
+          "avgLatency": { "type": "number", "minimum": 0 },
+          "latencyBreakdown": { "$ref": "#/components/schemas/MetricsLatencyBreakdown" },
+          "successRate": { "type": "number", "minimum": 0, "maximum": 100 }
+        },
+        "required": ["date", "calls", "cost", "success", "successAnalyzed", "analyzed", "inputTokens", "outputTokens", "avgLatencyMs", "latencySampleCount", "avgLatency", "latencyBreakdown", "successRate"],
+        "additionalProperties": false
+      },
+      "MetricsHourlyActivityItem": {
+        "type": "object",
+        "properties": {
+          "hour": { "type": "integer", "minimum": 0, "maximum": 23 },
+          "calls": { "type": "integer", "minimum": 0 }
+        },
+        "required": ["hour", "calls"],
+        "additionalProperties": false
+      },
+      "MetricsDurationBucket": {
+        "type": "object",
+        "properties": {
+          "range": { "type": "string" },
+          "count": { "type": "integer", "minimum": 0 }
+        },
+        "required": ["range", "count"],
+        "additionalProperties": false
+      },
+      "MetricsDisconnectReason": {
+        "type": "object",
+        "properties": {
+          "reason": { "type": "string" },
+          "count": { "type": "integer", "minimum": 0 }
+        },
+        "required": ["reason", "count"],
+        "additionalProperties": false
+      },
+      "MetricsSentimentItem": {
+        "type": "object",
+        "properties": {
+          "name": { "type": "string" },
+          "value": { "type": "integer", "minimum": 0 },
+          "color": { "type": "string" }
+        },
+        "required": ["name", "value", "color"],
+        "additionalProperties": false
+      },
+      "MetricsFunnel": {
+        "type": "object",
+        "properties": {
+          "initiated": { "type": "integer", "minimum": 0 },
+          "answered": { "type": "integer", "minimum": 0 },
+          "success": { "type": "integer", "minimum": 0 }
+        },
+        "required": ["initiated", "answered", "success"],
+        "additionalProperties": false
+      },
+      "MetricsTopAssistant": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "string" },
+          "name": { "type": "string" },
+          "calls": { "type": "integer", "minimum": 0 },
+          "answeredRate": { "type": "number", "minimum": 0, "maximum": 100 },
+          "analysisCoverage": { "type": "number", "minimum": 0, "maximum": 100 },
+          "successRate": { "type": "number", "minimum": 0, "maximum": 100 },
+          "avgDuration": { "type": "number", "minimum": 0 },
+          "totalCost": { "type": "number", "minimum": 0 },
+          "avgCost": { "type": "number", "minimum": 0 },
+          "totalInputTokens": { "type": "number", "minimum": 0 },
+          "totalOutputTokens": { "type": "number", "minimum": 0 },
+          "avgLatency": { "type": "number", "minimum": 0 },
+          "latencyBreakdown": { "$ref": "#/components/schemas/MetricsLatencyBreakdown" },
+          "ruleCompliance": { "type": "number", "minimum": 0, "maximum": 100 }
+        },
+        "required": ["id", "name", "calls", "answeredRate", "analysisCoverage", "successRate", "avgDuration", "totalCost", "avgCost", "totalInputTokens", "totalOutputTokens", "avgLatency", "latencyBreakdown", "ruleCompliance"],
+        "additionalProperties": false
+      },
+      "MetricsToolUsage": {
+        "type": "object",
+        "properties": {
+          "name": { "type": "string" },
+          "count": { "type": "integer", "minimum": 0 },
+          "success": { "type": "integer", "minimum": 0 },
+          "fail": { "type": "integer", "minimum": 0 }
+        },
+        "required": ["name", "count", "success", "fail"],
+        "additionalProperties": false
+      },
+      "MetricsResponse": {
+        "type": "object",
+        "properties": {
+          "summary": { "$ref": "#/components/schemas/MetricsSummary" },
+          "trends": { "type": "array", "items": { "$ref": "#/components/schemas/MetricsTrend" } },
+          "hourlyActivity": { "type": "array", "items": { "$ref": "#/components/schemas/MetricsHourlyActivityItem" } },
+          "durationDistribution": { "type": "array", "items": { "$ref": "#/components/schemas/MetricsDurationBucket" } },
+          "disconnectReasons": { "type": "array", "items": { "$ref": "#/components/schemas/MetricsDisconnectReason" } },
+          "sentimentAnalysis": { "type": "array", "items": { "$ref": "#/components/schemas/MetricsSentimentItem" } },
+          "funnel": { "$ref": "#/components/schemas/MetricsFunnel" },
+          "topAssistants": { "type": "array", "items": { "$ref": "#/components/schemas/MetricsTopAssistant" } },
+          "toolUsage": { "type": "array", "items": { "$ref": "#/components/schemas/MetricsToolUsage" } }
+        },
+        "required": ["summary", "trends", "hourlyActivity", "durationDistribution", "disconnectReasons", "sentimentAnalysis", "funnel", "topAssistants", "toolUsage"],
+        "additionalProperties": false
+      },
+      "SubscriptionLimits": {
+        "type": "object",
+        "properties": {
+          "concurrencyBlocked": { "type": "boolean" },
+          "concurrencyLimit": { "type": "integer", "minimum": 0 },
+          "remainingConcurrentCalls": { "type": "integer", "minimum": 0 }
+        },
+        "required": ["concurrencyBlocked", "concurrencyLimit", "remainingConcurrentCalls"]
+      },
+      "CarrierResponse": {
+        "description": "The carrier's successful 2xx body is passed through. Object acknowledgements may be accepted, skipped, or duplicate; non-JSON text is returned as a string and any valid JSON value may be returned. `callId` is optional here—use `payload.callId` as the stable identifier.",
+        "oneOf": [
+          {
+            "type": "object",
+            "properties": {
+              "ok": { "type": "boolean" },
+              "skipped": { "type": "boolean" },
+              "duplicate": { "type": "boolean" },
+              "status": { "type": ["string", "null"] },
+              "reason": { "type": ["string", "null"] },
+              "callId": { "type": ["string", "null"] },
+              "requestId": { "type": ["string", "null"] },
+              "activeCallId": { "type": ["string", "null"] },
+              "activeStatus": { "type": ["string", "null"] },
+              "endedReason": { "type": ["string", "null"] }
+            },
+            "additionalProperties": true
+          },
+          { "type": "string", "description": "Raw non-JSON carrier text." },
+          { "type": "array", "items": {} },
+          { "type": "number" },
+          { "type": "boolean" },
+          { "type": "null" }
+        ]
+      },
+      "CreateCallResponse": {
+        "type": "object",
+        "properties": {
+          "success": { "const": true },
+          "subscriptionLimits": { "$ref": "#/components/schemas/SubscriptionLimits" },
+          "payload": {
+            "type": "object",
+            "description": "The normalized call payload. `callId` is the stable identifier even when the carrier reports a skip.",
+            "properties": {
+              "callId": { "type": "string" },
+              "assistantId": { "type": "string" },
+              "squadId": { "type": "string" },
+              "workflowId": { "type": "string" },
+              "phoneNumberId": { "type": "string" },
+              "customer": {
+                "type": "object",
+                "properties": {
+                  "number": { "type": "string" },
+                  "name": { "type": "string" }
+                },
+                "required": ["number"]
+              },
+              "organizationId": { "type": "string" },
+              "requestId": { "type": "string" }
+            },
+            "required": ["callId", "assistantId", "phoneNumberId", "customer", "organizationId", "requestId"],
+            "additionalProperties": true
+          },
+          "carrier": { "$ref": "#/components/schemas/CarrierResponse" }
+        },
+        "required": ["success", "subscriptionLimits", "payload", "carrier"]
+      },
+      "WebCallResponse": {
+        "type": "object",
+        "properties": {
+          "success": { "const": true },
+          "callId": { "type": "string" },
+          "roomName": { "type": "string" },
+          "token": { "type": "string" },
+          "livekitUrl": { "type": "string", "format": "uri" },
+          "expiresInSeconds": { "type": "integer", "minimum": 1 },
+          "startedAt": { "type": "string", "format": "date-time" },
+          "subscriptionLimits": { "$ref": "#/components/schemas/SubscriptionLimits" }
+        },
+        "required": ["success", "callId", "roomName", "token", "livekitUrl", "expiresInSeconds", "startedAt", "subscriptionLimits"]
+      },
+      "KeywordBoost": {
+        "type": "object",
+        "properties": {
+          "phrase": { "type": "string", "minLength": 1 },
+          "boost": { "type": ["number", "null"] }
+        },
+        "required": ["phrase"],
+        "additionalProperties": false
+      },
+      "AssistantSttSettings": {
+        "type": "object",
+        "description": "Canonical assistant STT response. `keywords` entries are objects.",
+        "properties": {
+          "provider": { "type": ["string", "null"] },
+          "model": { "type": ["string", "null"] },
+          "language": { "type": ["string", "null"] },
+          "interimResults": { "type": "boolean" },
+          "smartFormat": { "type": "boolean" },
+          "optimizationProfile": { "type": "string" },
+          "keywords": {
+            "type": "array",
+            "items": { "$ref": "#/components/schemas/KeywordBoost" }
+          },
+          "keyterms": { "type": "array", "items": { "type": "string" } }
+        },
+        "additionalProperties": true
+      },
+      "AssistantSttSettingsInput": {
+        "type": "object",
+        "description": "Assistant STT create/update input. `provider` is required. `keywords` and its accepted alias `keywordBoosts` use `{ phrase, boost }` entries; string entries would be discarded by persistence.",
+        "properties": {
+          "provider": { "type": "string", "minLength": 1 },
+          "model": { "type": ["string", "null"] },
+          "language": { "type": ["string", "null"] },
+          "interimResults": { "type": "boolean" },
+          "smartFormat": { "type": "boolean" },
+          "optimizationProfile": { "type": "string" },
+          "keywords": {
+            "type": "array",
+            "items": { "$ref": "#/components/schemas/KeywordBoost" }
+          },
+          "keywordBoosts": {
+            "type": "array",
+            "description": "Accepted input alias; responses use `keywords`.",
+            "items": { "$ref": "#/components/schemas/KeywordBoost" }
+          },
+          "keyterms": { "type": "array", "items": { "type": "string" } }
+        },
+        "required": ["provider"],
+        "additionalProperties": true
+      },
+      "BackgroundAudioClipInput": {
+        "type": "object",
+        "properties": {
+          "builtin": { "type": ["string", "null"] },
+          "volume": { "type": ["number", "null"], "minimum": 0, "maximum": 1 }
+        },
+        "additionalProperties": true
+      },
+      "BackgroundAudioClip": {
+        "type": "object",
+        "properties": {
+          "builtin": { "type": ["string", "null"] },
+          "volume": { "type": ["number", "null"], "minimum": 0, "maximum": 1 }
+        },
+        "required": ["builtin", "volume"],
+        "additionalProperties": true
+      },
+      "AssistantBackgroundAudioInput": {
+        "type": "object",
+        "description": "Assistant background-audio input. `ambient` accepts a builtin string or clip object; canonical `thinking` input is a clip object. A thinking string is not preserved.",
+        "properties": {
+          "ambient": {
+            "oneOf": [
+              { "type": "string" },
+              { "$ref": "#/components/schemas/BackgroundAudioClipInput" },
+              { "type": "null" }
+            ]
+          },
+          "thinking": {
+            "oneOf": [
+              { "$ref": "#/components/schemas/BackgroundAudioClipInput" },
+              { "type": "null" }
+            ]
+          }
+        },
+        "additionalProperties": true
+      },
+      "AssistantBackgroundAudio": {
+        "type": "object",
+        "properties": {
+          "ambient": {
+            "oneOf": [
+              { "$ref": "#/components/schemas/BackgroundAudioClip" },
+              { "type": "null" }
+            ]
+          },
+          "thinking": {
+            "oneOf": [
+              { "$ref": "#/components/schemas/BackgroundAudioClip" },
+              { "type": "null" }
+            ]
+          }
+        },
+        "additionalProperties": true
+      },
+      "Assistant": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "string" },
+          "orgId": { "type": "string" },
+          "name": { "type": "string" },
+          "slug": { "type": "string" },
+          "status": { "type": "string", "enum": ["draft", "published"] },
+          "isActive": { "type": "boolean" },
+          "createdAt": { "type": "string", "format": "date-time" },
+          "updatedAt": { "type": "string", "format": "date-time" },
+          "firstMessage": { "type": ["string", "null"] },
+          "content": { "type": ["string", "null"] },
+          "serverUrl": { "type": ["string", "null"] },
+          "llm": { "type": "object", "additionalProperties": true },
+          "tts": { "type": "object", "additionalProperties": true },
+          "stt": { "$ref": "#/components/schemas/AssistantSttSettings" },
+          "conversation": { "type": "object", "additionalProperties": true },
+          "backgroundAudio": { "$ref": "#/components/schemas/AssistantBackgroundAudio" },
+          "privacy": { "type": "object", "additionalProperties": true },
+          "predefinedFunctions": { "type": "object", "additionalProperties": true },
+          "toolIds": { "type": "array", "items": { "type": "string" } },
+          "structuredOutputIds": { "type": "array", "items": { "type": "string" } },
+          "knowledgeFileIds": { "type": "array", "items": { "type": "string" } },
+          "folderId": { "type": ["string", "null"] },
+          "usePronunciationLibrary": { "type": "boolean" },
+          "pronunciationLibraryId": { "type": ["string", "null"] }
+        },
+        "required": ["id", "orgId", "name", "slug", "status", "isActive", "createdAt", "updatedAt", "firstMessage", "content", "serverUrl", "llm", "tts", "stt", "conversation", "backgroundAudio", "privacy", "predefinedFunctions", "toolIds", "structuredOutputIds", "knowledgeFileIds", "folderId", "usePronunciationLibrary", "pronunciationLibraryId"]
+      },
+      "ListAssistantsResponse": {
+        "type": "object",
+        "properties": {
+          "success": { "const": true },
+          "assistants": { "type": "array", "items": { "$ref": "#/components/schemas/Assistant" } }
+        },
+        "required": ["success", "assistants"]
+      },
+      "GetAssistantResponse": {
+        "type": "object",
+        "properties": {
+          "success": { "const": true },
+          "assistant": { "$ref": "#/components/schemas/Assistant" }
+        },
+        "required": ["success", "assistant"]
+      },
+      "CreateAssistantResponse": {
+        "description": "The normal success returns the assistant. If the post-insert read-back fails, the API still returns 201 with `assistantId` and `warning`.",
+        "oneOf": [
+          { "$ref": "#/components/schemas/GetAssistantResponse" },
+          {
+            "type": "object",
+            "properties": {
+              "success": { "const": true },
+              "assistantId": { "type": "string" },
+              "warning": { "type": "string" }
+            },
+            "required": ["success", "assistantId", "warning"]
+          }
+        ]
+      },
+      "UpdateAssistantResponse": {
+        "description": "The normal success returns the assistant. If the post-update read-back fails, the API returns `success: true` with a warning and no assistant.",
+        "oneOf": [
+          { "$ref": "#/components/schemas/GetAssistantResponse" },
+          {
+            "type": "object",
+            "properties": {
+              "success": { "const": true },
+              "warning": { "type": "string" }
+            },
+            "required": ["success", "warning"]
+          }
+        ]
+      },
+      "AiDisclosure": {
+        "type": "object",
+        "properties": {
+          "label": { "type": "string" },
+          "source": { "type": "string" },
+          "provider": { "type": ["string", "null"] },
+          "model": { "type": ["string", "null"] }
+        },
+        "required": ["label", "source", "provider", "model"]
+      },
+      "CallLog": {
+        "type": "object",
+        "description": "Sanitized public call log. Pending, failed, or artifact-suppressed calls can return null detail fields.",
+        "properties": {
+          "id": { "type": "string" },
+          "callId": { "type": "string" },
+          "assistantId": { "type": ["string", "null"] },
+          "assistantName": { "type": ["string", "null"] },
+          "idempotencyKey": { "type": ["string", "null"] },
+          "callType": { "type": "string" },
+          "status": { "type": "string" },
+          "startedAt": { "type": "string", "format": "date-time" },
+          "endedAt": { "type": ["string", "null"], "format": "date-time" },
+          "endReason": { "type": ["string", "null"] },
+          "durationSeconds": { "type": ["number", "null"] },
+          "customerName": { "type": ["string", "null"] },
+          "customerPhone": { "type": ["string", "null"] },
+          "organizationPhoneNumber": { "type": ["string", "null"] },
+          "phoneNumberProvider": { "type": ["string", "null"] },
+          "recordingUrl": { "type": ["string", "null"] },
+          "recordingAssistantUrl": { "type": ["string", "null"] },
+          "recordingCustomerUrl": { "type": ["string", "null"] },
+          "firstMessage": { "type": ["string", "null"] },
+          "mainPrompt": { "type": ["string", "null"] },
+          "serverUrl": { "type": ["string", "null"] },
+          "analysisSummary": { "type": ["string", "null"] },
+          "analysisSuccess": { "type": ["boolean", "null"] },
+          "analysisScore": { "type": ["number", "null"] },
+          "analysisSentiment": { "type": ["string", "null"] },
+          "analysisStatus": { "type": ["string", "null"] },
+          "costCurrency": { "type": ["string", "null"] },
+          "costTotal": { "type": ["number", "null"] },
+          "analysis": { "type": ["object", "null"], "additionalProperties": true },
+          "aiDisclosures": {
+            "type": ["object", "null"],
+            "additionalProperties": { "$ref": "#/components/schemas/AiDisclosure" }
+          },
+          "timeline": { "type": ["array", "null"], "items": {} },
+          "toolRuns": { "type": ["array", "null"], "items": {} },
+          "structuredOutputs": { "type": ["array", "null"], "items": {} },
+          "metadata": { "type": ["object", "null"], "additionalProperties": true },
+          "payload": {
+            "type": "null",
+            "description": "Always null on the public call-log routes; raw internal payloads are not exposed."
+          },
+          "publicPayload": { "type": ["object", "null"], "additionalProperties": true },
+          "history": { "type": "array", "items": {} },
+          "createdAt": { "type": "string", "format": "date-time" },
+          "updatedAt": { "type": "string", "format": "date-time" }
+        },
+        "required": ["id", "callId", "assistantId", "assistantName", "idempotencyKey", "callType", "status", "startedAt", "endedAt", "endReason", "durationSeconds", "customerName", "customerPhone", "organizationPhoneNumber", "phoneNumberProvider", "recordingUrl", "recordingAssistantUrl", "recordingCustomerUrl", "firstMessage", "mainPrompt", "serverUrl", "analysisSummary", "analysisSuccess", "analysisScore", "analysisSentiment", "analysisStatus", "costCurrency", "costTotal", "analysis", "aiDisclosures", "timeline", "toolRuns", "structuredOutputs", "metadata", "payload", "publicPayload", "history", "createdAt", "updatedAt"],
+        "additionalProperties": true
+      },
+      "CallLogPermissions": {
+        "type": "object",
+        "properties": {
+          "canManageCallLogs": { "const": false }
+        },
+        "required": ["canManageCallLogs"]
+      },
+      "ListCallLogsResponse": {
+        "type": "object",
+        "properties": {
+          "data": { "type": "array", "items": { "$ref": "#/components/schemas/CallLog" } },
+          "meta": {
+            "type": "object",
+            "properties": {
+              "page": { "type": "integer", "minimum": 1 },
+              "limit": { "type": "integer", "minimum": 1, "maximum": 100 },
+              "total": { "type": "integer", "minimum": 0 },
+              "totalPages": { "type": "integer", "minimum": 0 }
+            },
+            "required": ["page", "limit", "total", "totalPages"]
+          },
+          "permissions": { "$ref": "#/components/schemas/CallLogPermissions" }
+        },
+        "required": ["data", "meta", "permissions"]
+      },
+      "GetCallLogResponse": {
+        "type": "object",
+        "properties": {
+          "data": { "$ref": "#/components/schemas/CallLog" },
+          "permissions": { "$ref": "#/components/schemas/CallLogPermissions" }
+        },
+        "required": ["data", "permissions"]
+      }
+    }
+  }
+}

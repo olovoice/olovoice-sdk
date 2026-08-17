@@ -1,0 +1,55 @@
+[build-system]
+requires = ["hatchling==1.27.0"]
+build-backend = "hatchling.build"
+
+[project]
+name = "olovoice"
+dynamic = ["version"]
+description = "Official Python SDK for the olovoice Public API — AI voice agents, outbound calls, web calls, call logs, and metrics."
+readme = "README.md"
+license = "MIT"
+license-files = ["LICENSE"]
+requires-python = ">=3.11"
+dependencies = [
+  "httpcore>=1.0.9,<2",
+  "httpx>=0.28.1,<1",
+]
+keywords = ["olovoice", "voice", "ai", "telephony", "voice-agent", "sdk"]
+classifiers = [
+  "Development Status :: 4 - Beta",
+  "Intended Audience :: Developers",
+  "License :: OSI Approved :: MIT License",
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+  "Programming Language :: Python :: 3.13",
+  "Programming Language :: Python :: 3.14",
+  "Typing :: Typed",
+]
+
+[project.urls]
+Documentation = "https://docs.olovoice.ai"
+Source = "https://github.com/olovoice/olovoice-sdk"
+Issues = "https://github.com/olovoice/olovoice-sdk/issues"
+Changelog = "https://github.com/olovoice/olovoice-sdk/releases"
+
+[project.optional-dependencies]
+dev = [
+  "bandit>=1.8,<2",
+  "mypy>=1.14,<2",
+  "pip-audit==2.10.1",
+  "pytest>=7",
+  "pytest-asyncio>=0.23",
+]
+release = ["build==1.5.0", "hatchling==1.27.0", "twine==6.2.0"]
+
+[tool.hatch.version]
+path = "olovoice/_client.py"
+
+[tool.hatch.build.targets.wheel]
+packages = ["olovoice"]
+
+[tool.mypy]
+python_version = "3.11"
+strict = true
+files = ["olovoice", "tests"]

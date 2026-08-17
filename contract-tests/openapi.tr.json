@@ -1,0 +1,3346 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "OloVoice Public API",
+    "version": "2.0.0",
+    "description": "Giden telefon çağrıları başlatın, tarayıcı/web çağrıları çalıştırın, lead oluşturun, asistanları yönetin ve çağrı kayıtlarını, ses kayıtlarını ve metrikleri çekin.\n\nBu referans, canlı API rotalarının kod düzeyinde doğrulanmış bir okumasından üretilmiştir. Genel ağ geçidi dahili `/api/v1` ve `/api/public` öneklerini kaldırır; bu nedenle `POST /call`, `GET /call-logs` gibi çağrılar yaparsınız.",
+    "contact": {
+      "name": "OloVoice",
+      "url": "https://dashboard.olovoice.ai"
+    }
+  },
+  "servers": [
+    {
+      "url": "https://api.olovoice.ai",
+      "description": "Production"
+    }
+  ],
+  "security": [
+    {
+      "bearerAuth": []
+    }
+  ],
+  "tags": [
+    {
+      "name": "Calls",
+      "description": "Giden telefon ve web çağrıları başlatın."
+    },
+    {
+      "name": "Call Logs",
+      "description": "Çağrı kayıtlarını ve imzalı kayıt URL'lerini okuyun."
+    },
+    {
+      "name": "Assistants",
+      "description": "Çağrılarınızı yürüten yapay zekâ asistanlarını yönetin."
+    },
+    {
+      "name": "Leads",
+      "description": "Lead oluşturun ve çağrıları otomatik tetikleyin."
+    },
+    {
+      "name": "Metrics",
+      "description": "Toplu çağrı analitiği."
+    }
+  ],
+  "paths": {
+    "/call": {
+      "post": {
+        "tags": [
+          "Calls"
+        ],
+        "summary": "Çağrı oluştur",
+        "operationId": "createCall",
+        "x-required-scopes": ["calls:create"],
+        "description": "Bir **giden telefon çağrısı** başlatın. `phoneNumberId` organizasyon numarasından `customer.number` numarasını arar; bir asistan, squad veya workflow tarafından yürütülür.\n\nTüm alan adları camelCase'dir. `serverUrl` ve her tool için `webhookUrl` HTTPS olmalıdır.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "İstek kabul edildi. `carrier` alanını inceleyin: `success: true`, dialer'ın çağrıyı atladığı anlamına da gelebilir.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CreateCallResponse"
+                },
+                "example": {
+                  "success": true,
+                  "subscriptionLimits": {
+                    "concurrencyBlocked": false,
+                    "concurrencyLimit": 10,
+                    "remainingConcurrentCalls": 9
+                  },
+                  "payload": {
+                    "callId": "a1b2c3d4-5678-90ab-cdef-1234567890ab",
+                    "assistantId": "00000000-0000-0000-0000-000000000000",
+                    "phoneNumberId": "00000000-0000-0000-0000-000000000000",
+                    "customer": {
+                      "name": "Kemal",
+                      "number": "+905551234567"
+                    },
+                    "firstMessage": "Hi, how can I help you today?",
+                    "content": "You are a helpful assistant. Answer the user's questions clearly.",
+                    "serverUrl": "https://your-domain.com/webhooks/call-report",
+                    "llm": {
+                      "provider": "openai",
+                      "model": "gpt-4o"
+                    },
+                    "tts": {
+                      "provider": "elevenlabs",
+                      "model": "eleven_turbo_v2_5",
+                      "voiceId": "EXAVITQu4vr4xnSDxMaL"
+                    },
+                    "stt": {
+                      "provider": "deepgram",
+                      "model": "nova-2",
+                      "language": "en"
+                    },
+                    "predefinedFunctions": {
+                      "enableEndCallFunction": true
+                    },
+                    "organizationId": "00000000-0000-0000-0000-000000000000",
+                    "requestId": "f0e1d2c3-4455-6677-8899-aabbccddeeff"
+                  },
+                  "carrier": {
+                    "ok": true
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorWithSuccess"
+                },
+                "examples": {
+                  "case1": {
+                    "summary": "Doğrulama / telefon-formatı / snake_case hatası",
+                    "value": {
+                      "success": false,
+                      "error": "customer.number geçerli bir telefon numarası olmalıdır"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "examples": {
+                  "unauthorized": {
+                    "summary": "Eksik/geçersiz API anahtarı",
+                    "value": {
+                      "error": "Unauthorized"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "402": {
+            "description": "Payment Required",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorWithSuccess"
+                },
+                "examples": {
+                  "case1": {
+                    "summary": "Yetersiz cüzdan bakiyesi",
+                    "value": {
+                      "success": false,
+                      "error": "Yetersiz bakiye. Arama başlatılamıyor."
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too Many Requests",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorWithSuccess"
+                },
+                "examples": {
+                  "case1": {
+                    "summary": "Eşzamanlılık / hız limitine ulaşıldı",
+                    "value": {
+                      "success": false,
+                      "error": "Organizasyon eşzamanlı çağrı limitine ulaştı. Lütfen diğer görüşmeler tamamlandıktan sonra tekrar deneyin.",
+                      "subscriptionLimits": {
+                        "concurrencyBlocked": true,
+                        "concurrencyLimit": 10,
+                        "remainingConcurrentCalls": 0
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "Bad Gateway",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorWithSuccess"
+                },
+                "examples": {
+                  "case1": {
+                    "summary": "Operatöre (dialer) erişilemiyor",
+                    "value": {
+                      "success": false,
+                      "error": "Taşıyıcıya ulaşılamadı",
+                      "detail": "fetch failed"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "phoneNumberId",
+                  "customer",
+                  "llm",
+                  "conversation",
+                  "backgroundAudio"
+                ],
+                "allOf": [
+                  {
+                    "description": "En az bir seçici zorunludur. Doğrudan assistant isteği promptları taşımalıdır; squad/workflow istekleri bunları kayıtlı grafikten yükleyebilir.",
+                    "anyOf": [
+                      { "required": ["squadId"] },
+                      { "required": ["workflowId"] },
+                      { "required": ["assistantId", "firstMessage", "content"] }
+                    ]
+                  },
+                  {
+                    "description": "Klasik ses akışı TTS ve STT gerektirir. OpenAI realtime half-cascade TTS gerektirir; native-audio ikisini de gerektirmez.",
+                    "anyOf": [
+                      { "required": ["tts", "stt"] },
+                      {
+                        "required": ["tts"],
+                        "properties": {
+                          "llm": { "$ref": "#/components/schemas/OpenAiRealtimeLlm" }
+                        }
+                      },
+                      {
+                        "properties": {
+                          "llm": {
+                            "allOf": [
+                              { "$ref": "#/components/schemas/OpenAiRealtimeLlm" },
+                              {
+                                "properties": {
+                                  "realtimeMode": { "const": "nativeAudio" }
+                                },
+                                "required": ["realtimeMode"]
+                              }
+                            ]
+                          }
+                        }
+                      }
+                    ]
+                  }
+                ],
+                "description": "Tüm alan adları camelCase'dir — snake_case `400` döndürür.",
+                "properties": {
+                  "assistantId": {
+                    "type": "string",
+                    "minLength": 1,
+                    "description": "Çalıştırılacak asistan. assistantId/squadId/workflowId alanlarından biri zorunludur."
+                  },
+                  "squadId": {
+                    "type": "string",
+                    "minLength": 1,
+                    "description": "Çalıştırılacak squad (kendi giriş asistanını çözer)."
+                  },
+                  "workflowId": {
+                    "type": "string",
+                    "minLength": 1,
+                    "description": "Çalıştırılacak workflow (kendi başlangıç düğümünü çözer)."
+                  },
+                  "phoneNumberId": {
+                    "type": "string",
+                    "description": "Aranacak kaynak organizasyon telefon numarası. Giden çağrıyı desteklemeli ve yapılandırılmış bir trunk'a sahip olmalıdır."
+                  },
+                  "customer": {
+                    "type": "object",
+                    "required": [
+                      "number"
+                    ],
+                    "properties": {
+                      "number": {
+                        "type": "string",
+                        "pattern": "^\\+?[0-9]{6,20}$",
+                        "description": "Hedef numara. `^\\+?[0-9]{6,20}$` ile eşleşmelidir. E.164 önerilir.",
+                        "example": "+905551234567"
+                      },
+                      "name": {
+                        "type": "string",
+                        "example": "Kemal"
+                      }
+                    }
+                  },
+                  "firstMessage": {
+                    "type": "string",
+                    "minLength": 1,
+                    "description": "Açılış cümlesi. Squad/workflow tarafından sağlanmadıkça zorunludur."
+                  },
+                  "content": {
+                    "type": "string",
+                    "minLength": 1,
+                    "description": "Sistem promptu. Squad/workflow tarafından sağlanmadıkça zorunludur."
+                  },
+                  "serverUrl": {
+                    "type": "string",
+                    "format": "uri",
+                    "pattern": "^https://",
+                    "description": "Çağrı sonrası rapor için HTTPS webhook. Yalnızca HTTPS."
+                  },
+                  "llm": {
+                    "$ref": "#/components/schemas/RuntimeLlmConfig"
+                  },
+                  "tts": {
+                    "$ref": "#/components/schemas/RuntimeTtsConfig"
+                  },
+                  "stt": {
+                    "$ref": "#/components/schemas/RuntimeSttConfig"
+                  },
+                  "conversation": {
+                    "type": "object",
+                    "additionalProperties": true,
+                    "description": "Sıra alma / endpointing ayarları. Zorunlu nesne."
+                  },
+                  "backgroundAudio": {
+                    "$ref": "#/components/schemas/RuntimeBackgroundAudioConfig"
+                  },
+                  "privacy": {
+                    "type": "object",
+                    "additionalProperties": true,
+                    "default": {},
+                    "description": "Uyumluluk girdisi. Atlanırsa `{}` olarak normalize edilir; etkin `recordCalls`, `hipaaCompliant` ve `ologuardEnabled` değerleri her zaman kayıtlı asistan politikasından gelir ve çağrı bazında geçersiz kılınamaz."
+                  },
+                  "predefinedFunctions": {
+                    "type": "object",
+                    "additionalProperties": true,
+                    "default": {},
+                    "description": "İsteğe bağlı yerleşik tool'lar (end-call, keypad, DTMF). Atlanırsa `{}` olarak normalize edilir."
+                  },
+                  "tools": {
+                    "type": "array",
+                    "items": {
+                      "type": "object"
+                    },
+                    "description": "Satır içi tool'lar. Her biri `name` + `webhookUrl` (HTTPS) + `method` gerektirir."
+                  },
+                  "toolIds": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    },
+                    "description": "Kayıtlı tool'ların ID'leri (organizasyonunuza ait olmalıdır)."
+                  },
+                  "structuredOutputIds": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  "fileIds": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    },
+                    "description": "Bilgi tabanı dosya ID'leri."
+                  },
+                  "extras": {
+                    "type": "object",
+                    "additionalProperties": true,
+                    "description": "Serbest metadata. `extras.mem0Enabled` ayrılmış bir boolean uyumluluk sinyalidir, çağrı bazlı anahtar değildir; sunucu etkin Olophin değerini organizasyon paketi ve kayıtlı asistandan türetir."
+                  }
+                }
+              },
+              "example": {
+                "assistantId": "00000000-0000-0000-0000-000000000000",
+                "phoneNumberId": "00000000-0000-0000-0000-000000000000",
+                "customer": {
+                  "name": "Kemal",
+                  "number": "+905551234567"
+                },
+                "firstMessage": "Hi, how can I help you today?",
+                "content": "You are a helpful assistant. Answer the user's questions clearly.",
+                "serverUrl": "https://your-domain.com/webhooks/call-report",
+                "llm": {
+                  "provider": "openai",
+                  "model": "gpt-4o"
+                },
+                "tts": {
+                  "provider": "elevenlabs",
+                  "model": "eleven_turbo_v2_5",
+                  "voiceId": "EXAVITQu4vr4xnSDxMaL",
+                  "autoMode": true,
+                  "speed": 1
+                },
+                "stt": {
+                  "provider": "deepgram",
+                  "model": "nova-2",
+                  "language": "en",
+                  "interimResults": true,
+                  "smartFormat": true
+                },
+                "conversation": {
+                  "allowInterruptions": true
+                },
+                "backgroundAudio": {
+                  "ambient": {
+                    "builtin": "room",
+                    "volume": 1
+                  }
+                },
+                "predefinedFunctions": {
+                  "enableEndCallFunction": true,
+                  "enableDialKeypad": false
+                },
+                "toolIds": [],
+                "structuredOutputIds": [],
+                "fileIds": [],
+                "extras": {
+                  "customTag": "crm-sync-42"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/web-call": {
+      "post": {
+        "tags": [
+          "Calls"
+        ],
+        "summary": "Web çağrısı oluştur",
+        "operationId": "createWebCall",
+        "x-required-scopes": ["web_calls:create"],
+        "x-rollout": {
+          "enabledByDefault": false,
+          "featureFlag": "PUBLIC_WEB_CALL_ENABLED",
+          "disabledStatus": 403,
+          "disabledCode": "web_call_disabled"
+        },
+        "description": "Bir **telefonsuz (web/tarayıcı/uygulama) çağrı** başlatın. Bir LiveKit odası oluşturur, asistanı gönderir ve istemcinizin WebRTC üzerinden kullandığı kısa ömürlü bir katılımcı token'ı döndürür.\n\n> Yalnızca sunucudan sunucuya — API anahtarını asla bir tarayıcıya göndermeyin. Yalnızca `token`'ı (+ `livekitUrl`, `roomName`, `callId`) döndürün. Browser CORS varsayılan olarak kapalıdır; kendi backend proxy'nizi kullanın.\n\n`PUBLIC_WEB_CALL_ENABLED` sunucu bayrağının arkasında kısıtlanmıştır (kapalıyken `403 web_call_disabled` döndürür). `/call` ile aynı tekil organizasyon eşzamanlılık havuzunu paylaşır. Token varsayılan olarak 60 saniyedir ve yalnızca odaya katılma, mikrofon yayınlama ve agent sesine abone olma yetkisi verir. `costs`, `costConfig`, `cost_config`, `costCurrency` ve `webParticipantJoinTimeoutSeconds` sunucu tarafından yönetilir; gönderilirse `400 server_owned_field` döner.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Oda oluşturuldu; token verildi.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WebCallResponse"
+                },
+                "example": {
+                  "success": true,
+                  "callId": "web-7b2c8f1e-2a4d-4c6b-9f3a-1e2d3c4b5a6f",
+                  "roomName": "web-7b2c8f1e-2a4d-4c6b-9f3a-1e2d3c4b5a6f",
+                  "token": "<short-lived LiveKit participant JWT>",
+                  "livekitUrl": "wss://rtc.olovoice.ai",
+                  "expiresInSeconds": 60,
+                  "startedAt": "2026-06-04T09:10:01.123Z",
+                  "subscriptionLimits": {
+                    "concurrencyBlocked": false,
+                    "concurrencyLimit": 10,
+                    "remainingConcurrentCalls": 9
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorWithSuccess"
+                },
+                "examples": {
+                  "case1": {
+                    "summary": "Eksik organizationId / assistantId|squadId|workflowId yok / snake_case",
+                    "value": {
+                      "success": false,
+                      "error": "assistantId veya squadId veya workflowId zorunludur."
+                    }
+                  },
+                  "serverOwnedField": {
+                    "summary": "Sunucu tarafından yönetilen billing veya join-timeout alanı gönderildi",
+                    "value": {
+                      "success": false,
+                      "error": "Sunucu tarafından yönetilen alan istemci payload'ında gönderilemez.",
+                      "code": "server_owned_field",
+                      "field": "costs"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorWithSuccess"
+                },
+                "examples": {
+                  "unauthorized": {
+                    "summary": "Eksik/geçersiz API anahtarı",
+                    "value": {
+                      "success": false,
+                      "error": "Unauthorized"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "402": {
+            "description": "Payment Required",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorWithSuccess"
+                },
+                "examples": {
+                  "case1": {
+                    "summary": "Yetersiz cüzdan bakiyesi",
+                    "value": {
+                      "success": false,
+                      "error": "Yetersiz bakiye. Arama başlatılamıyor."
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorWithSuccess"
+                },
+                "examples": {
+                  "disabled": {
+                    "summary": "Endpoint devre dışı (PUBLIC_WEB_CALL_ENABLED kapalı)",
+                    "value": {
+                      "success": false,
+                      "error": "Web call API is not enabled",
+                      "code": "web_call_disabled"
+                    }
+                  },
+                  "mismatch": {
+                    "summary": "organizationId, API anahtarının organizasyonuyla eşleşmiyor",
+                    "value": {
+                      "success": false,
+                      "error": "organizationId, API anahtarının organizasyonu ile eşleşmiyor."
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "organizationId"
+                ],
+                "anyOf": [
+                  { "required": ["assistantId"] },
+                  { "required": ["squadId"] },
+                  { "required": ["workflowId"] }
+                ],
+                "allOf": [
+                  {
+                    "not": {
+                      "anyOf": [
+                        { "required": ["costs"] },
+                        { "required": ["costConfig"] },
+                        { "required": ["cost_config"] },
+                        { "required": ["costCurrency"] },
+                        { "required": ["webParticipantJoinTimeoutSeconds"] }
+                      ]
+                    }
+                  }
+                ],
+                "description": "`organizationId` zorunludur ve API anahtarınızın organizasyonuyla aynı olmalıdır. `assistantId`/`squadId`/`workflowId` alanlarından biri zorunludur. `/call` ile aynı camelCase yapılandırma nesneleri (üst düzey `toolIds` yok sayılır — satır içi `tools` kullanın). Sunucuya ait maliyet ve katılımcı zaman aşımı alanları `400 server_owned_field` ile reddedilir.",
+                "properties": {
+                  "organizationId": {
+                    "type": "string",
+                    "description": "API anahtarının organizasyonuyla aynı olmalıdır. Kimlik doğrulama değil, kiracı uyuşmazlığı koruması."
+                  },
+                  "assistantId": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "squadId": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "workflowId": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "customer": {
+                    "type": "object",
+                    "properties": {
+                      "name": {
+                        "type": "string",
+                        "description": "Yalnızca görünen ad — web çağrısı aranmaz."
+                      },
+                      "number": {
+                        "type": "string",
+                        "description": "İsteğe bağlı sabit müşteri kimliği metadata'sı. Asla aranmaz; telefon anahtarlı Olophin sürekliliği için kullanılabilir. E.164 biçimini tercih edin."
+                      }
+                    }
+                  },
+                  "firstMessage": {
+                    "type": "string"
+                  },
+                  "content": {
+                    "type": "string"
+                  },
+                  "serverUrl": {
+                    "type": "string",
+                    "format": "uri",
+                    "description": "Yalnızca HTTPS."
+                  },
+                  "llm": {
+                    "$ref": "#/components/schemas/RuntimeLlmConfig"
+                  },
+                  "tts": {
+                    "$ref": "#/components/schemas/RuntimeTtsConfig"
+                  },
+                  "stt": {
+                    "$ref": "#/components/schemas/RuntimeSttConfig"
+                  },
+                  "conversation": {
+                    "type": "object",
+                    "additionalProperties": true,
+                    "description": "Sıra alma ayarları."
+                  },
+                  "backgroundAudio": {
+                    "$ref": "#/components/schemas/RuntimeBackgroundAudioConfig"
+                  },
+                  "privacy": {
+                    "type": "object",
+                    "additionalProperties": true,
+                    "description": "Uyumluluk girdisi; etkin kayıt, HIPAA ve OloGuard değerleri kayıtlı asistan politikasından gelir ve web çağrısı bazında geçersiz kılınamaz."
+                  },
+                  "predefinedFunctions": {
+                    "type": "object",
+                    "additionalProperties": true,
+                    "description": "Yerleşik tool'lar."
+                  },
+                  "tools": {
+                    "type": "array",
+                    "items": {
+                      "type": "object"
+                    },
+                    "description": "Satır içi tool'lar (her `webhookUrl` HTTPS)."
+                  },
+                  "structuredOutputIds": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  "fileIds": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  "extras": {
+                    "type": "object",
+                    "additionalProperties": true
+                  }
+                }
+              },
+              "example": {
+                "organizationId": "00000000-0000-0000-0000-000000000000",
+                "assistantId": "00000000-0000-0000-0000-000000000000",
+                "customer": {
+                  "name": "Kemal"
+                },
+                "firstMessage": "Merhaba, size nasıl yardımcı olabilirim?",
+                "content": "Sen yardımcı bir sesli asistansın.",
+                "llm": {
+                  "provider": "openai",
+                  "model": "gpt-4o"
+                },
+                "tts": {
+                  "provider": "elevenlabs",
+                  "model": "eleven_turbo_v2_5",
+                  "voiceId": "EXAVITQu4vr4xnSDxMaL"
+                },
+                "stt": {
+                  "provider": "deepgram",
+                  "model": "nova-2",
+                  "language": "tr"
+                },
+                "conversation": {},
+                "backgroundAudio": {}
+              }
+            }
+          }
+        }
+      }
+    },
+    "/call-logs": {
+      "get": {
+        "tags": [
+          "Call Logs"
+        ],
+        "summary": "Çağrı kayıtlarını listele",
+        "operationId": "listCallLogs",
+        "x-required-scopes": ["call_logs:read"],
+        "description": "Organizasyonunuzun çağrı kayıtlarının sayfalanmış listesi, en yeniden başlayarak. Yanıtlar API anahtarı erişimi için temizlenir (dahili metrik alanları ve OloGuard PII bloğu kaldırılır; `toolRuns` döndürülür). Hız limiti: 60 istek / 60 saniye.\n\nYalnızca `limit`, `page` ve `organizationId` dikkate alınır — diğer filtreler yok sayılır.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Bir çağrı kayıtları sayfası.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ListCallLogsResponse"
+                },
+                "example": {
+                  "data": [
+                    {
+                      "id": "95cb8ec7-71ea-4a5a-8fae-145884f2f176",
+                      "callId": "95cb8ec7-71ea-4a5a-8fae-145884f2f176",
+                      "assistantId": "00000000-0000-0000-0000-000000000000",
+                      "assistantName": "Demo Assistant",
+                      "idempotencyKey": null,
+                      "callType": "outbound",
+                      "status": "completed",
+                      "startedAt": "2026-02-07T20:10:01.123Z",
+                      "endedAt": "2026-02-07T20:11:27.123Z",
+                      "endReason": "completed",
+                      "durationSeconds": 86,
+                      "customerName": "Ada Yilmaz",
+                      "customerPhone": "+905551234567",
+                      "organizationPhoneNumber": "+908503078861",
+                      "phoneNumberProvider": "twilio",
+                      "recordingUrl": "https://cdn.example.com/recordings/full.mp3",
+                      "recordingAssistantUrl": null,
+                      "recordingCustomerUrl": null,
+                      "firstMessage": "Hello, this is the assistant calling.",
+                      "mainPrompt": "You are a helpful assistant.",
+                      "serverUrl": "https://example.com/webhook",
+                      "analysisSummary": "The customer was informed and the call ended positively.",
+                      "analysisSuccess": true,
+                      "analysisScore": 92,
+                      "analysisSentiment": "positive",
+                      "analysisStatus": "completed",
+                      "costCurrency": "USD",
+                      "costTotal": 0.14,
+                      "analysis": {
+                        "summary": "Müşteri bilgilendirildi ve çağrı olumlu şekilde sonlandı.",
+                        "success": true,
+                        "score": 92,
+                        "sentiment": "positive",
+                        "reasons": null
+                      },
+                      "aiDisclosures": {
+                        "analysisSummary": {
+                          "label": "AI-generated",
+                          "source": "post_call_analysis",
+                          "provider": "openai",
+                          "model": "gpt-4o-mini"
+                        },
+                        "transcript": {
+                          "label": "AI-transcribed",
+                          "source": "speech_to_text",
+                          "provider": "deepgram",
+                          "model": "nova-3"
+                        }
+                      },
+                      "timeline": [],
+                      "toolRuns": [],
+                      "structuredOutputs": [],
+                      "metadata": {},
+                      "payload": null,
+                      "publicPayload": {},
+                      "history": [],
+                      "createdAt": "2026-02-07T20:10:01.123Z",
+                      "updatedAt": "2026-02-07T20:11:33.123Z"
+                    }
+                  ],
+                  "meta": {
+                    "page": 1,
+                    "limit": 25,
+                    "total": 120,
+                    "totalPages": 5
+                  },
+                  "permissions": {
+                    "canManageCallLogs": false
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "examples": {
+                  "unauthorized": {
+                    "summary": "Eksik/geçersiz API anahtarı",
+                    "value": {
+                      "error": "Unauthorized"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "examples": {
+                  "forbidden": {
+                    "summary": "organizationId sorgu parametresi, anahtarın organizasyonuyla eşleşmiyor",
+                    "value": {
+                      "error": "Forbidden"
+                    }
+                  },
+                  "orgNotActive": {
+                    "summary": "Organizasyonun access_status değeri aktif değil",
+                    "value": {
+                      "error": "Organization access is not active"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too Many Requests",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "examples": {
+                  "rate": {
+                    "summary": "Hız limiti aşıldı (Retry-After başlığı ayarlandı)",
+                    "value": {
+                      "error": "Çok fazla deneme yapıldı. Lütfen kısa bir süre sonra tekrar deneyin."
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "examples": {
+                  "case1": {
+                    "summary": "Veritabanı/depolama hatası",
+                    "value": {
+                      "error": "Çağrı kayıtları alınamadı."
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "description": "Sayfa başına kayıt. Varsayılan 25, min 1, maks 100.",
+            "schema": {
+              "type": "integer",
+              "default": 25,
+              "minimum": 1,
+              "maximum": 100
+            }
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "required": false,
+            "description": "1'den başlayan sayfa. Varsayılan 1, min 1, maks 100000.",
+            "schema": {
+              "type": "integer",
+              "default": 1,
+              "minimum": 1,
+              "maximum": 100000
+            }
+          },
+          {
+            "name": "organizationId",
+            "in": "query",
+            "required": false,
+            "description": "İsteğe bağlı. Gönderilirse API anahtarının organizasyonuyla aynı olmalıdır, aksi halde `403 Forbidden`.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ]
+      }
+    },
+    "/call-logs/{callId}": {
+      "get": {
+        "tags": [
+          "Call Logs"
+        ],
+        "summary": "Çağrı kaydını getir",
+        "operationId": "getCallLog",
+        "x-required-scopes": ["call_logs:read"],
+        "description": "`callId` ile tek bir çağrı kaydı; bir liste öğesiyle aynı temizlenmiş biçimde.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Çağrı kaydı.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GetCallLogResponse"
+                },
+                "example": {
+                  "data": {
+                    "id": "95cb8ec7-71ea-4a5a-8fae-145884f2f176",
+                    "callId": "95cb8ec7-71ea-4a5a-8fae-145884f2f176",
+                    "assistantId": "00000000-0000-0000-0000-000000000000",
+                    "assistantName": "Demo Assistant",
+                    "idempotencyKey": null,
+                    "callType": "outbound",
+                    "status": "completed",
+                    "startedAt": "2026-02-07T20:10:01.123Z",
+                    "endedAt": "2026-02-07T20:11:27.123Z",
+                    "endReason": "completed",
+                    "durationSeconds": 86,
+                    "customerName": "Ada Yilmaz",
+                    "customerPhone": "+905551234567",
+                    "organizationPhoneNumber": "+908503078861",
+                    "phoneNumberProvider": "twilio",
+                    "recordingUrl": "https://cdn.example.com/recordings/full.mp3",
+                    "recordingAssistantUrl": null,
+                    "recordingCustomerUrl": null,
+                    "firstMessage": "Hello, this is the assistant calling.",
+                    "mainPrompt": "You are a helpful assistant.",
+                    "serverUrl": "https://example.com/webhook",
+                    "analysisSummary": "The customer was informed and the call ended positively.",
+                    "analysisSuccess": true,
+                    "analysisScore": 92,
+                    "analysisSentiment": "positive",
+                    "analysisStatus": "completed",
+                    "costCurrency": "USD",
+                    "costTotal": 0.14,
+                    "analysis": {
+                      "summary": "Müşteri bilgilendirildi ve çağrı olumlu şekilde sonlandı.",
+                      "success": true,
+                      "score": 92,
+                      "sentiment": "positive",
+                      "reasons": null
+                    },
+                    "aiDisclosures": {
+                      "analysisSummary": {
+                        "label": "AI-generated",
+                        "source": "post_call_analysis",
+                        "provider": "openai",
+                        "model": "gpt-4o-mini"
+                      },
+                      "transcript": {
+                        "label": "AI-transcribed",
+                        "source": "speech_to_text",
+                        "provider": "deepgram",
+                        "model": "nova-3"
+                      }
+                    },
+                    "timeline": [],
+                    "toolRuns": [],
+                    "structuredOutputs": [],
+                    "metadata": {},
+                    "payload": null,
+                    "publicPayload": {},
+                    "history": [],
+                    "createdAt": "2026-02-07T20:10:01.123Z",
+                    "updatedAt": "2026-02-07T20:11:33.123Z"
+                  },
+                  "permissions": {
+                    "canManageCallLogs": false
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "examples": {
+                  "case1": {
+                    "summary": "callId yol segmenti boş",
+                    "value": {
+                      "error": "callId is required"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "examples": {
+                  "unauthorized": {
+                    "summary": "Eksik/geçersiz API anahtarı",
+                    "value": {
+                      "error": "Unauthorized"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "examples": {
+                  "case1": {
+                    "summary": "Bu organizasyon için o callId ile eşleşen çağrı kaydı yok",
+                    "value": {
+                      "error": "Call log not found"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too Many Requests",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "examples": {
+                  "rate": {
+                    "summary": "Hız limiti aşıldı (Retry-After başlığı ayarlandı)",
+                    "value": {
+                      "error": "Çok fazla deneme yapıldı. Lütfen kısa bir süre sonra tekrar deneyin."
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "callId",
+            "in": "path",
+            "required": true,
+            "description": "Çağrının kalıcı tanımlayıcısı (`POST /call` → `payload.callId` üzerinden).",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "organizationId",
+            "in": "query",
+            "required": false,
+            "description": "İsteğe bağlı. Gönderilirse API anahtarının organizasyonuyla aynı olmalıdır, aksi halde `403 Forbidden`.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ]
+      }
+    },
+    "/call-logs/{callId}/recording-url": {
+      "get": {
+        "tags": [
+          "Call Logs"
+        ],
+        "summary": "Kayıt URL'sini yenile",
+        "operationId": "refreshRecordingUrl",
+        "x-required-scopes": ["recordings:read"],
+        "description": "İstek üzerine yeni, kısa TTL'li imzalı kayıt URL'leri üretir. URL yerine `callId`'yi saklayın ve oynatma sırasında bunu çağırın. Yalnızca kayıt URL'leri sağlar — asla transkript/geçmiş sağlamaz. Varsayılan TTL 900s.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Yeni imzalanmış URL'ler.",
+            "content": {
+              "application/json": {
+                "example": {
+                  "data": {
+                    "callId": "95cb8ec7-71ea-4a5a-8fae-145884f2f176",
+                    "recordingUrl": "https://storage.olovoice.ai/object/sign/recordings/2026/02/call.mp3?token=REDACTED",
+                    "recordingAssistantUrl": null,
+                    "recordingCustomerUrl": null,
+                    "expiresInSeconds": 900
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "examples": {
+                  "case1": {
+                    "summary": "callId yol segmenti boş",
+                    "value": {
+                      "error": "callId is required"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "examples": {
+                  "unauthorized": {
+                    "summary": "Eksik/geçersiz API anahtarı",
+                    "value": {
+                      "error": "Unauthorized"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "examples": {
+                  "case1": {
+                    "summary": "Bu organizasyon için o callId ile eşleşen çağrı kaydı yok",
+                    "value": {
+                      "error": "Call log not found"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "examples": {
+                  "case1": {
+                    "summary": "İmzalama sırasında depolama hatası",
+                    "value": {
+                      "error": "Kayıt bağlantısı alınamadı."
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "callId",
+            "in": "path",
+            "required": true,
+            "description": "Çağrının kalıcı tanımlayıcısı.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "organizationId",
+            "in": "query",
+            "required": false,
+            "description": "İsteğe bağlı. Gönderilirse API anahtarının organizasyonuyla aynı olmalıdır, aksi halde `403 Forbidden`.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ]
+      }
+    },
+    "/assistants": {
+      "get": {
+        "tags": [
+          "Assistants"
+        ],
+        "summary": "Asistanları listele",
+        "operationId": "listAssistants",
+        "x-required-scopes": ["assistants:read"],
+        "description": "Organizasyonunuzun asistanlarını en yeniden başlayarak listeler.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Asistanlar.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ListAssistantsResponse"
+                },
+                "example": {
+                  "success": true,
+                  "assistants": [
+                    {
+                      "id": "00000000-0000-0000-0000-000000000000",
+                      "orgId": "00000000-0000-0000-0000-000000000000",
+                      "name": "Sales Bot",
+                      "slug": "sales-bot",
+                      "status": "published",
+                      "isActive": true,
+                      "createdAt": "2026-07-01T10:00:00.000Z",
+                      "updatedAt": "2026-07-01T10:00:00.000Z",
+                      "firstMessage": "Hello, how can I help you today?",
+                      "content": "You are a helpful sales assistant.",
+                      "serverUrl": "https://example.com/webhook",
+                      "llm": {
+                        "provider": "openai",
+                        "model": "gpt-4o"
+                      },
+                      "tts": {
+                        "provider": "elevenlabs",
+                        "model": null,
+                        "voiceId": "abc123",
+                        "optimizeStreamingLatency": null,
+                        "autoMode": null,
+                        "speed": null,
+                        "volume": null,
+                        "instructions": null
+                      },
+                      "stt": {
+                        "provider": "deepgram",
+                        "model": "nova-2",
+                        "language": "en",
+                        "interimResults": true,
+                        "smartFormat": true,
+                        "optimizationProfile": "balanced",
+                        "keywords": [],
+                        "keyterms": []
+                      },
+                      "conversation": {
+                        "allowInterruptions": true,
+                        "firstMessageMode": "assistantSpeaks",
+                        "mem0Enabled": true,
+                        "rulesEnabled": false,
+                        "handoffEnabled": false,
+                        "handoffNumber": null
+                      },
+                      "backgroundAudio": {
+                        "ambient": null,
+                        "thinking": null
+                      },
+                      "privacy": {
+                        "hipaaCompliant": false,
+                        "recordCalls": false,
+                        "ologuardEnabled": false,
+                        "message": null,
+                        "serverUrl": null
+                      },
+                      "predefinedFunctions": {
+                        "enableEndCallFunction": false,
+                        "enableDialKeypad": false,
+                        "enableDtmfCapture": false,
+                        "endCallMessages": []
+                      },
+                      "toolIds": [],
+                      "structuredOutputIds": [],
+                      "knowledgeFileIds": [],
+                      "folderId": null,
+                      "usePronunciationLibrary": false,
+                      "pronunciationLibraryId": null
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "examples": {
+                  "unauthorized": {
+                    "summary": "Eksik/geçersiz API anahtarı",
+                    "value": {
+                      "error": "Unauthorized"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too Many Requests",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "examples": {
+                  "case1": {
+                    "summary": "Hız limiti (60/dk)",
+                    "value": {
+                      "error": "Too Many Requests"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "examples": {
+                  "case1": {
+                    "summary": "Listeleme sorgusu başarısız oldu",
+                    "value": {
+                      "error": "Failed to list assistants"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "description": "Maksimum asistan sayısı. [1, 20] aralığına sınırlanır; varsayılan 20.",
+            "schema": {
+              "type": "integer",
+              "default": 20,
+              "minimum": 1,
+              "maximum": 20
+            }
+          }
+        ]
+      },
+      "post": {
+        "tags": [
+          "Assistants"
+        ],
+        "summary": "Asistan oluştur",
+        "operationId": "createAssistant",
+        "x-required-scopes": ["assistants:write"],
+        "description": "Bir asistan oluşturur ve tam eşlenmiş kaydı döndürür. `name`'den benzersiz bir `slug` üretilir.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": "Asistan oluşturuldu.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CreateAssistantResponse"
+                },
+                "example": {
+                  "success": true,
+                  "assistant": {
+                    "id": "00000000-0000-0000-0000-000000000000",
+                    "orgId": "00000000-0000-0000-0000-000000000000",
+                    "name": "Sales Bot",
+                    "slug": "sales-bot",
+                    "status": "published",
+                    "isActive": true,
+                    "createdAt": "2026-07-01T10:00:00.000Z",
+                    "updatedAt": "2026-07-01T10:00:00.000Z",
+                    "firstMessage": "Hello, how can I help you today?",
+                    "content": "You are a helpful sales assistant.",
+                    "serverUrl": "https://example.com/webhook",
+                    "llm": {
+                      "provider": "openai",
+                      "model": "gpt-4o"
+                    },
+                    "tts": {
+                      "provider": "elevenlabs",
+                      "model": null,
+                      "voiceId": "abc123",
+                      "optimizeStreamingLatency": null,
+                      "autoMode": null,
+                      "speed": null,
+                      "volume": null,
+                      "instructions": null
+                    },
+                    "stt": {
+                      "provider": "deepgram",
+                      "model": "nova-2",
+                      "language": "en",
+                      "interimResults": true,
+                      "smartFormat": true,
+                      "optimizationProfile": "balanced",
+                      "keywords": [],
+                      "keyterms": []
+                    },
+                    "conversation": {
+                      "allowInterruptions": true,
+                      "firstMessageMode": "assistantSpeaks",
+                      "mem0Enabled": true,
+                      "rulesEnabled": false,
+                      "handoffEnabled": false,
+                      "handoffNumber": null
+                    },
+                    "backgroundAudio": {
+                      "ambient": null,
+                      "thinking": null
+                    },
+                    "privacy": {
+                      "hipaaCompliant": false,
+                      "recordCalls": false,
+                      "ologuardEnabled": false,
+                      "message": null,
+                      "serverUrl": null
+                    },
+                    "predefinedFunctions": {
+                      "enableEndCallFunction": false,
+                      "enableDialKeypad": false,
+                      "enableDtmfCapture": false,
+                      "endCallMessages": []
+                    },
+                    "toolIds": [],
+                    "structuredOutputIds": [],
+                    "knowledgeFileIds": [],
+                    "folderId": null,
+                    "usePronunciationLibrary": false,
+                    "pronunciationLibraryId": null
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "examples": {
+                  "name": {
+                    "summary": "name eksik",
+                    "value": {
+                      "error": "name is required"
+                    }
+                  },
+                  "https": {
+                    "summary": "HTTPS olmayan serverUrl",
+                    "value": {
+                      "error": "serverUrl yalnızca HTTPS olmalıdır."
+                    }
+                  },
+                  "toolIds": {
+                    "summary": "Bilinmeyen toolIds",
+                    "value": {
+                      "error": "Invalid toolIds",
+                      "missing": [
+                        "tool_abc"
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "examples": {
+                  "unauthorized": {
+                    "summary": "Eksik/geçersiz API anahtarı",
+                    "value": {
+                      "error": "Unauthorized"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "name"
+                ],
+                "description": "Tüm alanlar camelCase. `status` değeri `draft` veya `published`'dir (başka herhangi bir değer `draft`'a dönüştürülür).",
+                "properties": {
+                  "name": {
+                    "type": "string",
+                    "description": "Zorunlu, boş olamaz."
+                  },
+                  "status": {
+                    "type": "string",
+                    "enum": [
+                      "draft",
+                      "published"
+                    ],
+                    "default": "draft"
+                  },
+                  "firstMessage": {
+                    "type": "string"
+                  },
+                  "content": {
+                    "type": "string",
+                    "description": "Sistem promptu (diğer adıyla mainPrompt)."
+                  },
+                  "isActive": {
+                    "type": "boolean",
+                    "description": "Varsayılan olarak `status === \"published\"`."
+                  },
+                  "serverUrl": {
+                    "type": "string",
+                    "format": "uri",
+                    "description": "HTTPS webhook."
+                  },
+                  "folderId": {
+                    "type": "string",
+                    "nullable": true
+                  },
+                  "llm": {
+                    "type": "object",
+                    "additionalProperties": true,
+                    "description": "LLM ayarları."
+                  },
+                  "tts": {
+                    "type": "object",
+                    "additionalProperties": true,
+                    "description": "TTS ayarları (diğer adıyla `voice`)."
+                  },
+                  "stt": {
+                    "$ref": "#/components/schemas/AssistantSttSettingsInput"
+                  },
+                  "conversation": {
+                    "type": "object",
+                    "additionalProperties": true,
+                    "description": "`mem0Enabled` ve OloFocus alanları (`noiseCancellationMode`, `oloFocusModel`, `oloFocusEnhancementLevel`, `vadProvider` ve gürültülü ortam uyarısı denetimleri) dahil konuşma ayarları."
+                  },
+                  "backgroundAudio": {
+                    "$ref": "#/components/schemas/AssistantBackgroundAudioInput"
+                  },
+                  "privacy": {
+                    "type": "object",
+                    "additionalProperties": true,
+                    "description": "Asistanın belirleyici kayıt, HIPAA ve OloGuard politikası. `ologuardEnabled` güncellemede belirtilmezse korunur."
+                  },
+                  "predefinedFunctions": {
+                    "type": "object",
+                    "additionalProperties": true,
+                    "description": "Yerleşik tool'lar."
+                  },
+                  "toolIds": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  "structuredOutputIds": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  "knowledgeFileIds": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  "usePronunciationLibrary": {
+                    "type": "boolean"
+                  },
+                  "pronunciationLibraryId": {
+                    "type": "string",
+                    "nullable": true,
+                    "description": "`usePronunciationLibrary` true ise zorunludur; `tts.provider = elevenlabs` gerektirir."
+                  }
+                }
+              },
+              "example": {
+                "name": "Sales Bot",
+                "status": "published",
+                "firstMessage": "Hello, how can I help you today?",
+                "content": "You are a helpful sales assistant for Acme Corp.",
+                "isActive": true,
+                "serverUrl": "https://example.com/webhook",
+                "llm": {
+                  "provider": "openai",
+                  "model": "gpt-4o",
+                  "temperature": 0.7
+                },
+                "tts": {
+                  "provider": "elevenlabs",
+                  "voiceId": "abc123",
+                  "speed": 1
+                },
+                "stt": {
+                  "provider": "deepgram",
+                  "model": "nova-2",
+                  "language": "en",
+                  "interimResults": true,
+                  "smartFormat": true
+                },
+                "conversation": {
+                  "allowInterruptions": true,
+                  "preemptiveGeneration": false,
+                  "firstMessageMode": "assistantSpeaks"
+                },
+                "privacy": {
+                  "recordCalls": false,
+                  "hipaaCompliant": false
+                },
+                "predefinedFunctions": {
+                  "enableEndCallFunction": true,
+                  "endCallMessages": [
+                    "Goodbye!"
+                  ]
+                },
+                "toolIds": [],
+                "structuredOutputIds": [],
+                "knowledgeFileIds": [],
+                "usePronunciationLibrary": false,
+                "pronunciationLibraryId": null
+              }
+            }
+          }
+        }
+      }
+    },
+    "/assistants/{assistantId}": {
+      "get": {
+        "tags": [
+          "Assistants"
+        ],
+        "summary": "Asistanı getir",
+        "operationId": "getAssistant",
+        "x-required-scopes": ["assistants:read"],
+        "description": "Organizasyonunuzla sınırlı olarak id'ye göre tek bir asistan getirir.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Asistan.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GetAssistantResponse"
+                },
+                "example": {
+                  "success": true,
+                  "assistant": {
+                    "id": "00000000-0000-0000-0000-000000000000",
+                    "orgId": "00000000-0000-0000-0000-000000000000",
+                    "name": "Sales Bot",
+                    "slug": "sales-bot",
+                    "status": "published",
+                    "isActive": true,
+                    "createdAt": "2026-07-01T10:00:00.000Z",
+                    "updatedAt": "2026-07-01T10:00:00.000Z",
+                    "firstMessage": "Hello, how can I help you today?",
+                    "content": "You are a helpful sales assistant.",
+                    "serverUrl": "https://example.com/webhook",
+                    "llm": {
+                      "provider": "openai",
+                      "model": "gpt-4o"
+                    },
+                    "tts": {
+                      "provider": "elevenlabs",
+                      "model": null,
+                      "voiceId": "abc123",
+                      "optimizeStreamingLatency": null,
+                      "autoMode": null,
+                      "speed": null,
+                      "volume": null,
+                      "instructions": null
+                    },
+                    "stt": {
+                      "provider": "deepgram",
+                      "model": "nova-2",
+                      "language": "en",
+                      "interimResults": true,
+                      "smartFormat": true,
+                      "optimizationProfile": "balanced",
+                      "keywords": [],
+                      "keyterms": []
+                    },
+                    "conversation": {
+                      "allowInterruptions": true,
+                      "firstMessageMode": "assistantSpeaks",
+                      "mem0Enabled": true,
+                      "rulesEnabled": false,
+                      "handoffEnabled": false,
+                      "handoffNumber": null
+                    },
+                    "backgroundAudio": {
+                      "ambient": null,
+                      "thinking": null
+                    },
+                    "privacy": {
+                      "hipaaCompliant": false,
+                      "recordCalls": false,
+                      "ologuardEnabled": false,
+                      "message": null,
+                      "serverUrl": null
+                    },
+                    "predefinedFunctions": {
+                      "enableEndCallFunction": false,
+                      "enableDialKeypad": false,
+                      "enableDtmfCapture": false,
+                      "endCallMessages": []
+                    },
+                    "toolIds": [],
+                    "structuredOutputIds": [],
+                    "knowledgeFileIds": [],
+                    "folderId": null,
+                    "usePronunciationLibrary": false,
+                    "pronunciationLibraryId": null
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "examples": {
+                  "unauthorized": {
+                    "summary": "Eksik/geçersiz API anahtarı",
+                    "value": {
+                      "error": "Unauthorized"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "examples": {
+                  "case1": {
+                    "summary": "Bu organizasyonda bulunamadı",
+                    "value": {
+                      "error": "Assistant not found"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "assistantId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ]
+      },
+      "patch": {
+        "tags": [
+          "Assistants"
+        ],
+        "summary": "Asistanı güncelle",
+        "operationId": "updateAssistant",
+        "x-required-scopes": ["assistants:write"],
+        "description": "Kısmi güncelleme. Yalnızca gönderilen üst düzey anahtarlar değiştirilir. İç içe yapılandırma nesneleri TAMAMEN DEĞİŞTİRİLİR (birleştirilmez) — belirtilmezse korunan `privacy.ologuardEnabled` hariç. Boş gövde → `400 No fields to update`.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Güncellenmiş asistan.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UpdateAssistantResponse"
+                },
+                "example": {
+                  "success": true,
+                  "assistant": {
+                    "id": "00000000-0000-0000-0000-000000000000",
+                    "orgId": "00000000-0000-0000-0000-000000000000",
+                    "name": "Sales Bot v2",
+                    "slug": "sales-bot",
+                    "status": "published",
+                    "isActive": true,
+                    "createdAt": "2026-07-01T10:00:00.000Z",
+                    "updatedAt": "2026-07-01T10:00:00.000Z",
+                    "firstMessage": "Hello, how can I help you today?",
+                    "content": "You are a helpful sales assistant.",
+                    "serverUrl": "https://example.com/webhook",
+                    "llm": {
+                      "provider": "openai",
+                      "model": "gpt-4o"
+                    },
+                    "tts": {
+                      "provider": "elevenlabs",
+                      "model": null,
+                      "voiceId": "abc123",
+                      "optimizeStreamingLatency": null,
+                      "autoMode": null,
+                      "speed": null,
+                      "volume": null,
+                      "instructions": null
+                    },
+                    "stt": {
+                      "provider": "deepgram",
+                      "model": "nova-2",
+                      "language": "en",
+                      "interimResults": true,
+                      "smartFormat": true,
+                      "optimizationProfile": "balanced",
+                      "keywords": [],
+                      "keyterms": []
+                    },
+                    "conversation": {
+                      "allowInterruptions": true,
+                      "firstMessageMode": "assistantSpeaks",
+                      "mem0Enabled": true,
+                      "rulesEnabled": false,
+                      "handoffEnabled": false,
+                      "handoffNumber": null
+                    },
+                    "backgroundAudio": {
+                      "ambient": null,
+                      "thinking": null
+                    },
+                    "privacy": {
+                      "hipaaCompliant": false,
+                      "recordCalls": true,
+                      "ologuardEnabled": false,
+                      "message": null,
+                      "serverUrl": null
+                    },
+                    "predefinedFunctions": {
+                      "enableEndCallFunction": false,
+                      "enableDialKeypad": false,
+                      "enableDtmfCapture": false,
+                      "endCallMessages": []
+                    },
+                    "toolIds": [
+                      "00000000-0000-0000-0000-000000000000"
+                    ],
+                    "structuredOutputIds": [],
+                    "knowledgeFileIds": [],
+                    "folderId": null,
+                    "usePronunciationLibrary": false,
+                    "pronunciationLibraryId": null
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "examples": {
+                  "noop": {
+                    "summary": "Boş / işlem yapmayan gövde",
+                    "value": {
+                      "error": "No fields to update"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "examples": {
+                  "unauthorized": {
+                    "summary": "Eksik/geçersiz API anahtarı",
+                    "value": {
+                      "error": "Unauthorized"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "examples": {
+                  "case1": {
+                    "summary": "Bu organizasyonda bulunamadı",
+                    "value": {
+                      "error": "Assistant not found"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "assistantId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "minProperties": 1,
+                "description": "Kısmi güncelleme — yalnızca gönderilen üst düzey anahtarlar değiştirilir. İç içe yapılandırma nesneleri TAMAMEN DEĞİŞTİRİLİR (derin birleştirilmez); belirtilmezse korunan `privacy.ologuardEnabled` hariç. Boş bir gövde `400 No fields to update` döndürür.",
+                "properties": {
+                  "name": {
+                    "type": "string",
+                    "description": "Zorunlu, boş olamaz."
+                  },
+                  "status": {
+                    "type": "string",
+                    "enum": [
+                      "draft",
+                      "published"
+                    ],
+                    "default": "draft"
+                  },
+                  "firstMessage": {
+                    "type": ["string", "null"],
+                    "description": "Açılış cümlesi. Temizlemek için `null` gönderin."
+                  },
+                  "content": {
+                    "type": ["string", "null"],
+                    "description": "Sistem promptu (diğer adıyla mainPrompt). Temizlemek için `null` gönderin."
+                  },
+                  "isActive": {
+                    "type": "boolean",
+                    "description": "Varsayılan olarak `status === \"published\"`."
+                  },
+                  "serverUrl": {
+                    "type": ["string", "null"],
+                    "format": "uri",
+                    "description": "HTTPS webhook. Temizlemek için `null` gönderin."
+                  },
+                  "folderId": {
+                    "type": "string",
+                    "nullable": true
+                  },
+                  "llm": {
+                    "type": "object",
+                    "additionalProperties": true,
+                    "description": "LLM ayarları."
+                  },
+                  "tts": {
+                    "type": "object",
+                    "additionalProperties": true,
+                    "description": "TTS ayarları (diğer adıyla `voice`)."
+                  },
+                  "stt": {
+                    "$ref": "#/components/schemas/AssistantSttSettingsInput"
+                  },
+                  "conversation": {
+                    "type": "object",
+                    "additionalProperties": true,
+                    "description": "`mem0Enabled` ve OloFocus alanları (`noiseCancellationMode`, `oloFocusModel`, `oloFocusEnhancementLevel`, `vadProvider` ve gürültülü ortam uyarısı denetimleri) dahil konuşma ayarları."
+                  },
+                  "backgroundAudio": {
+                    "$ref": "#/components/schemas/AssistantBackgroundAudioInput"
+                  },
+                  "privacy": {
+                    "type": "object",
+                    "additionalProperties": true,
+                    "description": "Asistanın belirleyici kayıt, HIPAA ve OloGuard politikası. `ologuardEnabled` güncellemede belirtilmezse korunur."
+                  },
+                  "predefinedFunctions": {
+                    "type": "object",
+                    "additionalProperties": true,
+                    "description": "Yerleşik tool'lar."
+                  },
+                  "toolIds": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  "structuredOutputIds": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  "knowledgeFileIds": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  "usePronunciationLibrary": {
+                    "type": "boolean"
+                  },
+                  "pronunciationLibraryId": {
+                    "type": "string",
+                    "nullable": true,
+                    "description": "`usePronunciationLibrary` true ise zorunludur; `tts.provider = elevenlabs` gerektirir."
+                  }
+                }
+              },
+              "example": {
+                "name": "Sales Bot v2",
+                "status": "published",
+                "firstMessage": "Hi! Thanks for calling Acme.",
+                "content": "You are an upgraded sales assistant.",
+                "isActive": true,
+                "serverUrl": "https://example.com/webhook-v2",
+                "llm": {
+                  "provider": "openai",
+                  "model": "gpt-4o"
+                },
+                "tts": {
+                  "provider": "elevenlabs",
+                  "voiceId": "xyz789"
+                },
+                "privacy": {
+                  "recordCalls": true
+                },
+                "toolIds": [
+                  "00000000-0000-0000-0000-000000000000"
+                ]
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "Assistants"
+        ],
+        "summary": "Asistanı sil",
+        "operationId": "deleteAssistant",
+        "x-required-scopes": ["assistants:write"],
+        "description": "Organizasyonunuza ait bir asistanı kalıcı olarak siler. Mevcut çağrı kayıtları korunur.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Silindi.",
+            "content": {
+              "application/json": {
+                "example": {
+                  "success": true
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "examples": {
+                  "unauthorized": {
+                    "summary": "Eksik/geçersiz API anahtarı",
+                    "value": {
+                      "error": "Unauthorized"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "examples": {
+                  "case1": {
+                    "summary": "Bu organizasyonda bulunamadı",
+                    "value": {
+                      "error": "Assistant not found"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "assistantId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ]
+      }
+    },
+    "/leads": {
+      "post": {
+        "tags": [
+          "Leads"
+        ],
+        "summary": "Lead oluştur",
+        "operationId": "createLead",
+        "x-required-scopes": ["leads:write"],
+        "description": "Bir lead oluşturur ve isteğe bağlı olarak bir giden çağrıyı tetikler. Organizasyon, API anahtarından türetilir. **Lead Management** paketini gerektirir. `call.status` değeri `called` | `queued` | `skipped` | `failed`'dir. Yanıt anahtarları snake_case'dir (`lead_id`).",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Lead oluşturuldu.",
+            "content": {
+              "application/json": {
+                "example": {
+                  "success": true,
+                  "lead_id": "3f9a2c8e-1b7d-4e2a-9c1f-2a4b6d8e0f11",
+                  "call": {
+                    "status": "called"
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "examples": {
+                  "required": {
+                    "summary": "name veya phone eksik",
+                    "value": {
+                      "error": "phone is required"
+                    }
+                  },
+                  "json": {
+                    "summary": "Gövde geçerli JSON değil",
+                    "value": {
+                      "error": "Invalid JSON"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "examples": {
+                  "unauthorized": {
+                    "summary": "Eksik/geçersiz API anahtarı",
+                    "value": {
+                      "error": "Unauthorized"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "examples": {
+                  "package": {
+                    "summary": "Lead Management paketi aktif değil",
+                    "value": {
+                      "error": "Lead yönetimi paketi aktif değil."
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "name",
+                  "phone"
+                ],
+                "properties": {
+                  "name": {
+                    "type": "string",
+                    "description": "Zorunlu, kırpma sonrası boş olamaz."
+                  },
+                  "phone": {
+                    "type": "string",
+                    "description": "Zorunlu, kırpma sonrası boş olamaz.",
+                    "example": "+905551112233"
+                  },
+                  "email": {
+                    "type": "string",
+                    "format": "email"
+                  },
+                  "metadata": {
+                    "type": "object",
+                    "additionalProperties": true,
+                    "description": "Serbest biçimli. Prompta `{{lead_<key>}}` olarak sunulur (anahtarlar `^[a-zA-Z0-9_]+$` ile eşleşmelidir)."
+                  },
+                  "categoryId": {
+                    "type": "string",
+                    "description": "Kategorinin hem bir asistanı hem de telefon numarası varsa, otomatik olarak bir giden çağrı başlatılır."
+                  },
+                  "campaignId": {
+                    "type": "string",
+                    "description": "Lead'i bir kampanyaya bağlar. Bilinmeyen ID'ler yumuşak uyarı verir."
+                  }
+                }
+              },
+              "example": {
+                "name": "Jane Doe",
+                "phone": "+905551112233",
+                "email": "lead@example.com",
+                "categoryId": "00000000-0000-0000-0000-000000000000",
+                "campaignId": "00000000-0000-0000-0000-000000000000",
+                "metadata": {
+                  "source": "website-form",
+                  "plan": "pro"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/metrics": {
+      "get": {
+        "tags": [
+          "Metrics"
+        ],
+        "summary": "Metrikleri getir",
+        "operationId": "getMetrics",
+        "x-required-scopes": ["metrics:read"],
+        "description": "Bir tarih aralığındaki toplu çağrı analitiği: özet, günlük trendler, saatlik etkinlik, süre dağılımı, bağlantı kesme nedenleri, duygu analizi, huni, en iyi asistanlar ve tool kullanımı. Gecikme değerleri milisaniye cinsindendir.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Toplu metrikler.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MetricsResponse"
+                },
+                "example": {
+                  "summary": {
+                    "totalCalls": 128,
+                    "totalDuration": 15420,
+                    "totalCost": 42.75,
+                    "successRate": 71.4,
+                    "analysisCoverage": 87.5,
+                    "answeredRate": 82,
+                    "answeredCalls": 105,
+                    "analyzedCalls": 112,
+                    "pendingAnalysisCalls": 16,
+                    "ruleCompliance": 88.2,
+                    "totalInputTokens": 214500,
+                    "totalOutputTokens": 63120,
+                    "avgLatencyMs": 912,
+                    "latencyBreakdown": {
+                      "avgTurnEndDelayMs": 180,
+                      "avgLlmTtftMs": 540,
+                      "avgRealtimeTtftMs": 0,
+                      "avgTtsTtfbMs": 190,
+                      "avgPlaybackLatencyMs": 0,
+                      "avgTotalLatencyMs": 912,
+                      "sampleCount": 112,
+                      "dominantSource": "llm",
+                      "dominantLabel": "LLM ilk token"
+                    },
+                    "currency": "TRY",
+                    "rules": {
+                      "passed": 240,
+                      "partial": 18,
+                      "failed": 30,
+                      "checked": 288
+                    }
+                  },
+                  "trends": [
+                    {
+                      "date": "2026-01-01",
+                      "calls": 12,
+                      "cost": 3.9,
+                      "success": 8,
+                      "successAnalyzed": 8,
+                      "analyzed": 10,
+                      "inputTokens": 18200,
+                      "outputTokens": 5300,
+                      "avgLatency": 905,
+                      "avgLatencyMs": 9955,
+                      "latencySampleCount": 11,
+                      "latencyBreakdown": {
+                        "avgTurnEndDelayMs": 175,
+                        "avgLlmTtftMs": 535,
+                        "avgRealtimeTtftMs": 0,
+                        "avgTtsTtfbMs": 185,
+                        "avgPlaybackLatencyMs": 0,
+                        "avgTotalLatencyMs": 905,
+                        "sampleCount": 11,
+                        "dominantSource": "llm",
+                        "dominantLabel": "LLM ilk token"
+                      },
+                      "successRate": 80
+                    }
+                  ],
+                  "hourlyActivity": [
+                    {
+                      "hour": 0,
+                      "calls": 0
+                    },
+                    {
+                      "hour": 9,
+                      "calls": 14
+                    }
+                  ],
+                  "durationDistribution": [
+                    {
+                      "range": "0-1 dk",
+                      "count": 40
+                    },
+                    {
+                      "range": "1-3 dk",
+                      "count": 55
+                    },
+                    {
+                      "range": "3-5 dk",
+                      "count": 20
+                    },
+                    {
+                      "range": "5+ dk",
+                      "count": 13
+                    }
+                  ],
+                  "disconnectReasons": [
+                    {
+                      "reason": "Müşteri Kapattı",
+                      "count": 61
+                    },
+                    {
+                      "reason": "Cevap Yok",
+                      "count": 22
+                    }
+                  ],
+                  "sentimentAnalysis": [
+                    {
+                      "name": "Pozitif",
+                      "value": 70,
+                      "color": "#10b981"
+                    },
+                    {
+                      "name": "Nötr",
+                      "value": 33,
+                      "color": "#6b7280"
+                    },
+                    {
+                      "name": "Negatif",
+                      "value": 9,
+                      "color": "#f43f5e"
+                    }
+                  ],
+                  "funnel": {
+                    "initiated": 128,
+                    "answered": 105,
+                    "success": 80
+                  },
+                  "topAssistants": [
+                    {
+                      "id": "00000000-0000-0000-0000-000000000000",
+                      "name": "Sales Bot",
+                      "calls": 74,
+                      "answeredRate": 83.8,
+                      "analysisCoverage": 90.5,
+                      "successRate": 72,
+                      "avgDuration": 121.4,
+                      "totalCost": 24.6,
+                      "avgCost": 0.33,
+                      "totalInputTokens": 132000,
+                      "totalOutputTokens": 38900,
+                      "avgLatency": 898,
+                      "latencyBreakdown": {
+                        "avgTurnEndDelayMs": 172,
+                        "avgLlmTtftMs": 528,
+                        "avgRealtimeTtftMs": 0,
+                        "avgTtsTtfbMs": 182,
+                        "avgPlaybackLatencyMs": 0,
+                        "avgTotalLatencyMs": 898,
+                        "sampleCount": 67,
+                        "dominantSource": "llm",
+                        "dominantLabel": "LLM ilk token"
+                      },
+                      "ruleCompliance": 89.1
+                    }
+                  ],
+                  "toolUsage": [
+                    {
+                      "name": "book_appointment",
+                      "count": 41,
+                      "success": 38,
+                      "fail": 3
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "examples": {
+                  "custom": {
+                    "summary": "Geçerli startDate/endDate olmadan range=custom",
+                    "value": {
+                      "error": "Custom tarih aralığı için startDate ve endDate (YYYY-MM-DD) zorunludur."
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "examples": {
+                  "unauthorized": {
+                    "summary": "Eksik/geçersiz API anahtarı",
+                    "value": {
+                      "error": "Unauthorized"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "examples": {
+                  "forbidden": {
+                    "summary": "organizationId uyuşmazlığı",
+                    "value": {
+                      "error": "Forbidden"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "range",
+            "in": "query",
+            "required": false,
+            "description": "7d (varsayılan), 30d/last_30, 90d/last_90, 180d/last_180, 365d/last_365 veya custom.",
+            "schema": {
+              "type": "string",
+              "default": "7d",
+              "enum": [
+                "7d",
+                "30d",
+                "90d",
+                "180d",
+                "365d",
+                "custom"
+              ]
+            }
+          },
+          {
+            "name": "startDate",
+            "in": "query",
+            "required": false,
+            "description": "YYYY-MM-DD. Yalnızca range=custom olduğunda zorunludur.",
+            "schema": {
+              "type": "string",
+              "format": "date"
+            }
+          },
+          {
+            "name": "endDate",
+            "in": "query",
+            "required": false,
+            "description": "YYYY-MM-DD (UTC gün sonu). Yalnızca range=custom olduğunda zorunludur.",
+            "schema": {
+              "type": "string",
+              "format": "date"
+            }
+          },
+          {
+            "name": "assistantId",
+            "in": "query",
+            "required": false,
+            "description": "Tek bir asistana göre filtreler. `all` == filtre yok.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "organizationId",
+            "in": "query",
+            "required": false,
+            "description": "İsteğe bağlı. Gönderilirse API anahtarının organizasyonuyla aynı olmalıdır, aksi halde `403 Forbidden`.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ]
+      }
+    }
+  },
+  "components": {
+    "securitySchemes": {
+      "bearerAuth": {
+        "type": "http",
+        "scheme": "bearer",
+        "bearerFormat": "API Key",
+        "description": "`Authorization: Bearer YOUR_API_KEY` gönderin. Her işlem API anahtarı kapsamını `x-required-scopes` alanında bildirir."
+      }
+    },
+    "schemas": {
+      "Error": {
+        "type": "object",
+        "properties": {
+          "error": {
+            "type": "string",
+            "description": "İnsan tarafından okunabilir hata mesajı."
+          }
+        },
+        "required": [
+          "error"
+        ],
+        "description": "/call-logs, /assistants, /leads, /metrics için standart hata biçimi."
+      },
+      "ErrorWithSuccess": {
+        "type": "object",
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "example": false
+          },
+          "error": {
+            "type": "string"
+          },
+          "detail": {
+            "type": "string"
+          },
+          "code": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "error"
+        ],
+        "description": "/call ve /web-call için hata biçimi (`success: false` içerir)."
+      },
+      "RuntimeLlmConfig": {
+        "type": "object",
+        "description": "Runtime LLM ayarları. Kabul edilen bir dispatch'in worker tarafından başlatılabilmesi için `provider` ve `model` zorunludur.",
+        "properties": {
+          "provider": {
+            "type": "string",
+            "enum": ["openai", "openai-realtime", "openai_realtime", "openai.realtime", "google", "gemini", "anthropic", "aws", "amazon", "bedrock", "groq", "groq.ai", "groqai", "qwen"]
+          },
+          "model": { "type": "string", "minLength": 1 },
+          "realtimeMode": { "type": "string", "enum": ["halfCascade", "nativeAudio"] }
+        },
+        "required": ["provider", "model"],
+        "additionalProperties": true
+      },
+      "RuntimeTtsConfig": {
+        "type": "object",
+        "description": "Runtime TTS ayarları. Bu alan gönderildiğinde `provider` her zaman zorunludur. ElevenLabs/OpenAI `model` ve `voiceId` ister; AWS Polly `voiceId` ister ve `model` alanını `polly-neural` varsayar; Freya/Nova model ve ses varsayılanları sağlar. `/call` üzerinde alanın tamamı yalnızca OpenAI realtime native-audio için atlanabilir; `/web-call` alanı atlayıp kayıtlı assistant yapılandırmasını hydrate edebilir.",
+        "properties": {
+          "provider": {
+            "type": "string",
+            "enum": ["aws", "amazon", "elevenlabs", "eleven", "freya", "freyavoice", "nova", "novaforge", "nova-tts", "openai", "polly"]
+          },
+          "model": { "type": ["string", "null"] },
+          "voiceId": { "type": ["string", "null"] }
+        },
+        "required": ["provider"],
+        "allOf": [
+          {
+            "if": {
+              "properties": {
+                "provider": { "enum": ["aws", "amazon", "polly"] }
+              },
+              "required": ["provider"]
+            },
+            "then": {
+              "required": ["voiceId"],
+              "properties": {
+                "voiceId": { "type": "string", "minLength": 1 },
+                "model": {
+                  "enum": [null, "standard", "polly-standard", "neural", "polly-neural", "generative", "polly-generative", "long-form", "longform", "polly-long-form"]
+                }
+              }
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "provider": { "enum": ["elevenlabs", "eleven", "openai"] }
+              },
+              "required": ["provider"]
+            },
+            "then": {
+              "required": ["model", "voiceId"],
+              "properties": {
+                "model": { "type": "string", "minLength": 1 },
+                "voiceId": { "type": "string", "minLength": 1 }
+              }
+            }
+          }
+        ],
+        "additionalProperties": true
+      },
+      "RuntimeSttConfig": {
+        "type": "object",
+        "description": "Runtime STT override'ı. Kayıtlı assistant STT ayarlarıyla additive merge edildiğinden `{ language: \"tr\" }` gibi provider içermeyen kısmi override geçerlidir. Runtime çağrıları string veya nesne keyword öğeleri kullanabilir.",
+        "properties": {
+          "provider": {
+            "type": "string",
+            "enum": ["azure", "azure_speech", "azure-speech", "aws", "amazon", "transcribe", "transcribe-streaming", "deepgram", "dg", "elevenlabs", "eleven", "eleven-labs", "freya", "freyavoice", "groq", "groq.ai", "groqai", "nova", "novaforge", "nova-stt", "openai", "whisper"]
+          }
+        },
+        "additionalProperties": true
+      },
+      "RuntimeBackgroundAudioConfig": {
+        "type": "object",
+        "description": "Runtime background audio. `/call` için zorunludur; `{}` olabilir. Runtime ambient/thinking değerleri builtin string veya sağlayıcı nesnesi olabilir.",
+        "additionalProperties": true
+      },
+      "OpenAiRealtimeLlm": {
+        "type": "object",
+        "description": "Sunucunun OpenAI realtime olarak normalize ettiği LLM yapılandırması.",
+        "properties": {
+          "realtimeMode": {
+            "type": "string",
+            "enum": ["halfCascade", "nativeAudio"],
+            "description": "Tanınan realtime sağlayıcı/model için varsayılan halfCascade'dir. nativeAudio ayrıca sunucu tarafındaki OPENAI_REALTIME_NATIVE_AUDIO_ENABLED rollout bayrağını gerektirir."
+          }
+        },
+        "anyOf": [
+          {
+            "properties": {
+              "provider": {
+                "enum": ["openai-realtime", "openai_realtime", "openai.realtime"]
+              },
+              "model": { "type": "string", "minLength": 1 }
+            },
+            "required": ["provider", "model"]
+          },
+          {
+            "properties": {
+              "provider": { "const": "openai" },
+              "model": {
+                "enum": ["gpt-realtime", "gpt-realtime-1.5", "gpt-realtime-2"]
+              }
+            },
+            "required": ["provider", "model"]
+          }
+        ]
+      },
+      "MetricsLatencyBreakdown": {
+        "type": "object",
+        "properties": {
+          "avgTurnEndDelayMs": { "type": "number", "minimum": 0 },
+          "avgLlmTtftMs": { "type": "number", "minimum": 0 },
+          "avgRealtimeTtftMs": { "type": "number", "minimum": 0 },
+          "avgTtsTtfbMs": { "type": "number", "minimum": 0 },
+          "avgPlaybackLatencyMs": { "type": "number", "minimum": 0 },
+          "avgTotalLatencyMs": { "type": "number", "minimum": 0 },
+          "sampleCount": { "type": "integer", "minimum": 0 },
+          "dominantSource": { "type": "string" },
+          "dominantLabel": { "type": "string" }
+        },
+        "required": ["avgTurnEndDelayMs", "avgLlmTtftMs", "avgRealtimeTtftMs", "avgTtsTtfbMs", "avgPlaybackLatencyMs", "avgTotalLatencyMs", "sampleCount", "dominantSource", "dominantLabel"],
+        "additionalProperties": false
+      },
+      "MetricsRuleCounts": {
+        "type": "object",
+        "properties": {
+          "passed": { "type": "integer", "minimum": 0 },
+          "partial": { "type": "integer", "minimum": 0 },
+          "failed": { "type": "integer", "minimum": 0 },
+          "checked": { "type": "integer", "minimum": 0 }
+        },
+        "required": ["passed", "partial", "failed", "checked"],
+        "additionalProperties": false
+      },
+      "MetricsSummary": {
+        "type": "object",
+        "properties": {
+          "totalCalls": { "type": "integer", "minimum": 0 },
+          "totalDuration": { "type": "number", "minimum": 0 },
+          "totalCost": { "type": "number", "minimum": 0 },
+          "successRate": { "type": "number", "minimum": 0, "maximum": 100 },
+          "analysisCoverage": { "type": "number", "minimum": 0, "maximum": 100 },
+          "answeredRate": { "type": "number", "minimum": 0, "maximum": 100 },
+          "answeredCalls": { "type": "integer", "minimum": 0 },
+          "analyzedCalls": { "type": "integer", "minimum": 0 },
+          "pendingAnalysisCalls": { "type": "integer", "minimum": 0 },
+          "ruleCompliance": { "type": "number", "minimum": 0, "maximum": 100 },
+          "totalInputTokens": { "type": "number", "minimum": 0 },
+          "totalOutputTokens": { "type": "number", "minimum": 0 },
+          "avgLatencyMs": { "type": "number", "minimum": 0 },
+          "latencyBreakdown": { "$ref": "#/components/schemas/MetricsLatencyBreakdown" },
+          "currency": { "type": ["string", "null"] },
+          "rules": { "$ref": "#/components/schemas/MetricsRuleCounts" }
+        },
+        "required": ["totalCalls", "totalDuration", "totalCost", "successRate", "analysisCoverage", "answeredRate", "answeredCalls", "analyzedCalls", "pendingAnalysisCalls", "ruleCompliance", "totalInputTokens", "totalOutputTokens", "avgLatencyMs", "latencyBreakdown", "currency", "rules"],
+        "additionalProperties": false
+      },
+      "MetricsTrend": {
+        "type": "object",
+        "properties": {
+          "date": { "type": "string", "format": "date" },
+          "calls": { "type": "integer", "minimum": 0 },
+          "cost": { "type": "number", "minimum": 0 },
+          "success": { "type": "integer", "minimum": 0 },
+          "successAnalyzed": { "type": "integer", "minimum": 0 },
+          "analyzed": { "type": "integer", "minimum": 0 },
+          "inputTokens": { "type": "number", "minimum": 0 },
+          "outputTokens": { "type": "number", "minimum": 0 },
+          "avgLatencyMs": { "type": "number", "minimum": 0 },
+          "latencySampleCount": { "type": "integer", "minimum": 0 },
+          "avgLatency": { "type": "number", "minimum": 0 },
+          "latencyBreakdown": { "$ref": "#/components/schemas/MetricsLatencyBreakdown" },
+          "successRate": { "type": "number", "minimum": 0, "maximum": 100 }
+        },
+        "required": ["date", "calls", "cost", "success", "successAnalyzed", "analyzed", "inputTokens", "outputTokens", "avgLatencyMs", "latencySampleCount", "avgLatency", "latencyBreakdown", "successRate"],
+        "additionalProperties": false
+      },
+      "MetricsHourlyActivityItem": {
+        "type": "object",
+        "properties": {
+          "hour": { "type": "integer", "minimum": 0, "maximum": 23 },
+          "calls": { "type": "integer", "minimum": 0 }
+        },
+        "required": ["hour", "calls"],
+        "additionalProperties": false
+      },
+      "MetricsDurationBucket": {
+        "type": "object",
+        "properties": {
+          "range": { "type": "string" },
+          "count": { "type": "integer", "minimum": 0 }
+        },
+        "required": ["range", "count"],
+        "additionalProperties": false
+      },
+      "MetricsDisconnectReason": {
+        "type": "object",
+        "properties": {
+          "reason": { "type": "string" },
+          "count": { "type": "integer", "minimum": 0 }
+        },
+        "required": ["reason", "count"],
+        "additionalProperties": false
+      },
+      "MetricsSentimentItem": {
+        "type": "object",
+        "properties": {
+          "name": { "type": "string" },
+          "value": { "type": "integer", "minimum": 0 },
+          "color": { "type": "string" }
+        },
+        "required": ["name", "value", "color"],
+        "additionalProperties": false
+      },
+      "MetricsFunnel": {
+        "type": "object",
+        "properties": {
+          "initiated": { "type": "integer", "minimum": 0 },
+          "answered": { "type": "integer", "minimum": 0 },
+          "success": { "type": "integer", "minimum": 0 }
+        },
+        "required": ["initiated", "answered", "success"],
+        "additionalProperties": false
+      },
+      "MetricsTopAssistant": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "string" },
+          "name": { "type": "string" },
+          "calls": { "type": "integer", "minimum": 0 },
+          "answeredRate": { "type": "number", "minimum": 0, "maximum": 100 },
+          "analysisCoverage": { "type": "number", "minimum": 0, "maximum": 100 },
+          "successRate": { "type": "number", "minimum": 0, "maximum": 100 },
+          "avgDuration": { "type": "number", "minimum": 0 },
+          "totalCost": { "type": "number", "minimum": 0 },
+          "avgCost": { "type": "number", "minimum": 0 },
+          "totalInputTokens": { "type": "number", "minimum": 0 },
+          "totalOutputTokens": { "type": "number", "minimum": 0 },
+          "avgLatency": { "type": "number", "minimum": 0 },
+          "latencyBreakdown": { "$ref": "#/components/schemas/MetricsLatencyBreakdown" },
+          "ruleCompliance": { "type": "number", "minimum": 0, "maximum": 100 }
+        },
+        "required": ["id", "name", "calls", "answeredRate", "analysisCoverage", "successRate", "avgDuration", "totalCost", "avgCost", "totalInputTokens", "totalOutputTokens", "avgLatency", "latencyBreakdown", "ruleCompliance"],
+        "additionalProperties": false
+      },
+      "MetricsToolUsage": {
+        "type": "object",
+        "properties": {
+          "name": { "type": "string" },
+          "count": { "type": "integer", "minimum": 0 },
+          "success": { "type": "integer", "minimum": 0 },
+          "fail": { "type": "integer", "minimum": 0 }
+        },
+        "required": ["name", "count", "success", "fail"],
+        "additionalProperties": false
+      },
+      "MetricsResponse": {
+        "type": "object",
+        "properties": {
+          "summary": { "$ref": "#/components/schemas/MetricsSummary" },
+          "trends": { "type": "array", "items": { "$ref": "#/components/schemas/MetricsTrend" } },
+          "hourlyActivity": { "type": "array", "items": { "$ref": "#/components/schemas/MetricsHourlyActivityItem" } },
+          "durationDistribution": { "type": "array", "items": { "$ref": "#/components/schemas/MetricsDurationBucket" } },
+          "disconnectReasons": { "type": "array", "items": { "$ref": "#/components/schemas/MetricsDisconnectReason" } },
+          "sentimentAnalysis": { "type": "array", "items": { "$ref": "#/components/schemas/MetricsSentimentItem" } },
+          "funnel": { "$ref": "#/components/schemas/MetricsFunnel" },
+          "topAssistants": { "type": "array", "items": { "$ref": "#/components/schemas/MetricsTopAssistant" } },
+          "toolUsage": { "type": "array", "items": { "$ref": "#/components/schemas/MetricsToolUsage" } }
+        },
+        "required": ["summary", "trends", "hourlyActivity", "durationDistribution", "disconnectReasons", "sentimentAnalysis", "funnel", "topAssistants", "toolUsage"],
+        "additionalProperties": false
+      },
+      "SubscriptionLimits": {
+        "type": "object",
+        "properties": {
+          "concurrencyBlocked": { "type": "boolean" },
+          "concurrencyLimit": { "type": "integer", "minimum": 0 },
+          "remainingConcurrentCalls": { "type": "integer", "minimum": 0 }
+        },
+        "required": ["concurrencyBlocked", "concurrencyLimit", "remainingConcurrentCalls"]
+      },
+      "CarrierResponse": {
+        "description": "Carrier'ın başarılı 2xx gövdesi değiştirilmeden aktarılır. Nesne yanıtı kabul, atlama veya duplicate durumu olabilir; JSON olmayan metin string, geçerli başka JSON değerleri de kendi türünde döner. `callId` burada opsiyoneldir—kararlı kimlik olarak `payload.callId` kullanın.",
+        "oneOf": [
+          {
+            "type": "object",
+            "properties": {
+              "ok": { "type": "boolean" },
+              "skipped": { "type": "boolean" },
+              "duplicate": { "type": "boolean" },
+              "status": { "type": ["string", "null"] },
+              "reason": { "type": ["string", "null"] },
+              "callId": { "type": ["string", "null"] },
+              "requestId": { "type": ["string", "null"] },
+              "activeCallId": { "type": ["string", "null"] },
+              "activeStatus": { "type": ["string", "null"] },
+              "endedReason": { "type": ["string", "null"] }
+            },
+            "additionalProperties": true
+          },
+          { "type": "string", "description": "Ham JSON olmayan carrier metni." },
+          { "type": "array", "items": {} },
+          { "type": "number" },
+          { "type": "boolean" },
+          { "type": "null" }
+        ]
+      },
+      "CreateCallResponse": {
+        "type": "object",
+        "properties": {
+          "success": { "const": true },
+          "subscriptionLimits": { "$ref": "#/components/schemas/SubscriptionLimits" },
+          "payload": {
+            "type": "object",
+            "description": "Normalize edilmiş çağrı payload'ı. Carrier atlama bildirse bile `callId` kararlı kimliktir.",
+            "properties": {
+              "callId": { "type": "string" },
+              "assistantId": { "type": "string" },
+              "squadId": { "type": "string" },
+              "workflowId": { "type": "string" },
+              "phoneNumberId": { "type": "string" },
+              "customer": {
+                "type": "object",
+                "properties": {
+                  "number": { "type": "string" },
+                  "name": { "type": "string" }
+                },
+                "required": ["number"]
+              },
+              "organizationId": { "type": "string" },
+              "requestId": { "type": "string" }
+            },
+            "required": ["callId", "assistantId", "phoneNumberId", "customer", "organizationId", "requestId"],
+            "additionalProperties": true
+          },
+          "carrier": { "$ref": "#/components/schemas/CarrierResponse" }
+        },
+        "required": ["success", "subscriptionLimits", "payload", "carrier"]
+      },
+      "WebCallResponse": {
+        "type": "object",
+        "properties": {
+          "success": { "const": true },
+          "callId": { "type": "string" },
+          "roomName": { "type": "string" },
+          "token": { "type": "string" },
+          "livekitUrl": { "type": "string", "format": "uri" },
+          "expiresInSeconds": { "type": "integer", "minimum": 1 },
+          "startedAt": { "type": "string", "format": "date-time" },
+          "subscriptionLimits": { "$ref": "#/components/schemas/SubscriptionLimits" }
+        },
+        "required": ["success", "callId", "roomName", "token", "livekitUrl", "expiresInSeconds", "startedAt", "subscriptionLimits"]
+      },
+      "KeywordBoost": {
+        "type": "object",
+        "properties": {
+          "phrase": { "type": "string", "minLength": 1 },
+          "boost": { "type": ["number", "null"] }
+        },
+        "required": ["phrase"],
+        "additionalProperties": false
+      },
+      "AssistantSttSettings": {
+        "type": "object",
+        "description": "Canonical assistant STT yanıtı. `keywords` öğeleri nesnedir.",
+        "properties": {
+          "provider": { "type": ["string", "null"] },
+          "model": { "type": ["string", "null"] },
+          "language": { "type": ["string", "null"] },
+          "interimResults": { "type": "boolean" },
+          "smartFormat": { "type": "boolean" },
+          "optimizationProfile": { "type": "string" },
+          "keywords": {
+            "type": "array",
+            "items": { "$ref": "#/components/schemas/KeywordBoost" }
+          },
+          "keyterms": { "type": "array", "items": { "type": "string" } }
+        },
+        "additionalProperties": true
+      },
+      "AssistantSttSettingsInput": {
+        "type": "object",
+        "description": "Assistant STT create/update girişi. `provider` zorunludur. `keywords` ve kabul edilen `keywordBoosts` alias'ı `{ phrase, boost }` öğeleri kullanır; string öğeler kalıcılık katmanında atılır.",
+        "properties": {
+          "provider": { "type": "string", "minLength": 1 },
+          "model": { "type": ["string", "null"] },
+          "language": { "type": ["string", "null"] },
+          "interimResults": { "type": "boolean" },
+          "smartFormat": { "type": "boolean" },
+          "optimizationProfile": { "type": "string" },
+          "keywords": {
+            "type": "array",
+            "items": { "$ref": "#/components/schemas/KeywordBoost" }
+          },
+          "keywordBoosts": {
+            "type": "array",
+            "description": "Kabul edilen input alias'ı; yanıtlar `keywords` kullanır.",
+            "items": { "$ref": "#/components/schemas/KeywordBoost" }
+          },
+          "keyterms": { "type": "array", "items": { "type": "string" } }
+        },
+        "required": ["provider"],
+        "additionalProperties": true
+      },
+      "BackgroundAudioClipInput": {
+        "type": "object",
+        "properties": {
+          "builtin": { "type": ["string", "null"] },
+          "volume": { "type": ["number", "null"], "minimum": 0, "maximum": 1 }
+        },
+        "additionalProperties": true
+      },
+      "BackgroundAudioClip": {
+        "type": "object",
+        "properties": {
+          "builtin": { "type": ["string", "null"] },
+          "volume": { "type": ["number", "null"], "minimum": 0, "maximum": 1 }
+        },
+        "required": ["builtin", "volume"],
+        "additionalProperties": true
+      },
+      "AssistantBackgroundAudioInput": {
+        "type": "object",
+        "description": "Assistant backgroundAudio girişi. `ambient` builtin string veya klip nesnesi kabul eder; canonical `thinking` girişi klip nesnesidir. Thinking string kalıcılaştırılmaz.",
+        "properties": {
+          "ambient": {
+            "oneOf": [
+              { "type": "string" },
+              { "$ref": "#/components/schemas/BackgroundAudioClipInput" },
+              { "type": "null" }
+            ]
+          },
+          "thinking": {
+            "oneOf": [
+              { "$ref": "#/components/schemas/BackgroundAudioClipInput" },
+              { "type": "null" }
+            ]
+          }
+        },
+        "additionalProperties": true
+      },
+      "AssistantBackgroundAudio": {
+        "type": "object",
+        "properties": {
+          "ambient": {
+            "oneOf": [
+              { "$ref": "#/components/schemas/BackgroundAudioClip" },
+              { "type": "null" }
+            ]
+          },
+          "thinking": {
+            "oneOf": [
+              { "$ref": "#/components/schemas/BackgroundAudioClip" },
+              { "type": "null" }
+            ]
+          }
+        },
+        "additionalProperties": true
+      },
+      "Assistant": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "string" },
+          "orgId": { "type": "string" },
+          "name": { "type": "string" },
+          "slug": { "type": "string" },
+          "status": { "type": "string", "enum": ["draft", "published"] },
+          "isActive": { "type": "boolean" },
+          "createdAt": { "type": "string", "format": "date-time" },
+          "updatedAt": { "type": "string", "format": "date-time" },
+          "firstMessage": { "type": ["string", "null"] },
+          "content": { "type": ["string", "null"] },
+          "serverUrl": { "type": ["string", "null"] },
+          "llm": { "type": "object", "additionalProperties": true },
+          "tts": { "type": "object", "additionalProperties": true },
+          "stt": { "$ref": "#/components/schemas/AssistantSttSettings" },
+          "conversation": { "type": "object", "additionalProperties": true },
+          "backgroundAudio": { "$ref": "#/components/schemas/AssistantBackgroundAudio" },
+          "privacy": { "type": "object", "additionalProperties": true },
+          "predefinedFunctions": { "type": "object", "additionalProperties": true },
+          "toolIds": { "type": "array", "items": { "type": "string" } },
+          "structuredOutputIds": { "type": "array", "items": { "type": "string" } },
+          "knowledgeFileIds": { "type": "array", "items": { "type": "string" } },
+          "folderId": { "type": ["string", "null"] },
+          "usePronunciationLibrary": { "type": "boolean" },
+          "pronunciationLibraryId": { "type": ["string", "null"] }
+        },
+        "required": ["id", "orgId", "name", "slug", "status", "isActive", "createdAt", "updatedAt", "firstMessage", "content", "serverUrl", "llm", "tts", "stt", "conversation", "backgroundAudio", "privacy", "predefinedFunctions", "toolIds", "structuredOutputIds", "knowledgeFileIds", "folderId", "usePronunciationLibrary", "pronunciationLibraryId"]
+      },
+      "ListAssistantsResponse": {
+        "type": "object",
+        "properties": {
+          "success": { "const": true },
+          "assistants": { "type": "array", "items": { "$ref": "#/components/schemas/Assistant" } }
+        },
+        "required": ["success", "assistants"]
+      },
+      "GetAssistantResponse": {
+        "type": "object",
+        "properties": {
+          "success": { "const": true },
+          "assistant": { "$ref": "#/components/schemas/Assistant" }
+        },
+        "required": ["success", "assistant"]
+      },
+      "CreateAssistantResponse": {
+        "description": "Normal başarı assistant kaydını döndürür. Insert sonrası okuma başarısız olursa API yine 201 ile `assistantId` ve `warning` döndürür.",
+        "oneOf": [
+          { "$ref": "#/components/schemas/GetAssistantResponse" },
+          {
+            "type": "object",
+            "properties": {
+              "success": { "const": true },
+              "assistantId": { "type": "string" },
+              "warning": { "type": "string" }
+            },
+            "required": ["success", "assistantId", "warning"]
+          }
+        ]
+      },
+      "UpdateAssistantResponse": {
+        "description": "Normal başarı assistant kaydını döndürür. Update sonrası okuma başarısız olursa API assistant olmadan `success: true` ve warning döndürür.",
+        "oneOf": [
+          { "$ref": "#/components/schemas/GetAssistantResponse" },
+          {
+            "type": "object",
+            "properties": {
+              "success": { "const": true },
+              "warning": { "type": "string" }
+            },
+            "required": ["success", "warning"]
+          }
+        ]
+      },
+      "AiDisclosure": {
+        "type": "object",
+        "properties": {
+          "label": { "type": "string" },
+          "source": { "type": "string" },
+          "provider": { "type": ["string", "null"] },
+          "model": { "type": ["string", "null"] }
+        },
+        "required": ["label", "source", "provider", "model"]
+      },
+      "CallLog": {
+        "type": "object",
+        "description": "Temizlenmiş public çağrı kaydı. Pending, failed veya artifact-suppressed çağrılarda detay alanları null olabilir.",
+        "properties": {
+          "id": { "type": "string" },
+          "callId": { "type": "string" },
+          "assistantId": { "type": ["string", "null"] },
+          "assistantName": { "type": ["string", "null"] },
+          "idempotencyKey": { "type": ["string", "null"] },
+          "callType": { "type": "string" },
+          "status": { "type": "string" },
+          "startedAt": { "type": "string", "format": "date-time" },
+          "endedAt": { "type": ["string", "null"], "format": "date-time" },
+          "endReason": { "type": ["string", "null"] },
+          "durationSeconds": { "type": ["number", "null"] },
+          "customerName": { "type": ["string", "null"] },
+          "customerPhone": { "type": ["string", "null"] },
+          "organizationPhoneNumber": { "type": ["string", "null"] },
+          "phoneNumberProvider": { "type": ["string", "null"] },
+          "recordingUrl": { "type": ["string", "null"] },
+          "recordingAssistantUrl": { "type": ["string", "null"] },
+          "recordingCustomerUrl": { "type": ["string", "null"] },
+          "firstMessage": { "type": ["string", "null"] },
+          "mainPrompt": { "type": ["string", "null"] },
+          "serverUrl": { "type": ["string", "null"] },
+          "analysisSummary": { "type": ["string", "null"] },
+          "analysisSuccess": { "type": ["boolean", "null"] },
+          "analysisScore": { "type": ["number", "null"] },
+          "analysisSentiment": { "type": ["string", "null"] },
+          "analysisStatus": { "type": ["string", "null"] },
+          "costCurrency": { "type": ["string", "null"] },
+          "costTotal": { "type": ["number", "null"] },
+          "analysis": { "type": ["object", "null"], "additionalProperties": true },
+          "aiDisclosures": {
+            "type": ["object", "null"],
+            "additionalProperties": { "$ref": "#/components/schemas/AiDisclosure" }
+          },
+          "timeline": { "type": ["array", "null"], "items": {} },
+          "toolRuns": { "type": ["array", "null"], "items": {} },
+          "structuredOutputs": { "type": ["array", "null"], "items": {} },
+          "metadata": { "type": ["object", "null"], "additionalProperties": true },
+          "payload": {
+            "type": "null",
+            "description": "Public çağrı kaydı rotalarında her zaman null; ham dahili payload dışarı açılmaz."
+          },
+          "publicPayload": { "type": ["object", "null"], "additionalProperties": true },
+          "history": { "type": "array", "items": {} },
+          "createdAt": { "type": "string", "format": "date-time" },
+          "updatedAt": { "type": "string", "format": "date-time" }
+        },
+        "required": ["id", "callId", "assistantId", "assistantName", "idempotencyKey", "callType", "status", "startedAt", "endedAt", "endReason", "durationSeconds", "customerName", "customerPhone", "organizationPhoneNumber", "phoneNumberProvider", "recordingUrl", "recordingAssistantUrl", "recordingCustomerUrl", "firstMessage", "mainPrompt", "serverUrl", "analysisSummary", "analysisSuccess", "analysisScore", "analysisSentiment", "analysisStatus", "costCurrency", "costTotal", "analysis", "aiDisclosures", "timeline", "toolRuns", "structuredOutputs", "metadata", "payload", "publicPayload", "history", "createdAt", "updatedAt"],
+        "additionalProperties": true
+      },
+      "CallLogPermissions": {
+        "type": "object",
+        "properties": {
+          "canManageCallLogs": { "const": false }
+        },
+        "required": ["canManageCallLogs"]
+      },
+      "ListCallLogsResponse": {
+        "type": "object",
+        "properties": {
+          "data": { "type": "array", "items": { "$ref": "#/components/schemas/CallLog" } },
+          "meta": {
+            "type": "object",
+            "properties": {
+              "page": { "type": "integer", "minimum": 1 },
+              "limit": { "type": "integer", "minimum": 1, "maximum": 100 },
+              "total": { "type": "integer", "minimum": 0 },
+              "totalPages": { "type": "integer", "minimum": 0 }
+            },
+            "required": ["page", "limit", "total", "totalPages"]
+          },
+          "permissions": { "$ref": "#/components/schemas/CallLogPermissions" }
+        },
+        "required": ["data", "meta", "permissions"]
+      },
+      "GetCallLogResponse": {
+        "type": "object",
+        "properties": {
+          "data": { "$ref": "#/components/schemas/CallLog" },
+          "permissions": { "$ref": "#/components/schemas/CallLogPermissions" }
+        },
+        "required": ["data", "permissions"]
+      }
+    }
+  }
+}
