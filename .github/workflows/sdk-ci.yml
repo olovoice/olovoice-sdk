@@ -27,9 +27,14 @@ jobs:
       - run: npm ci
       - run: npm test
       - name: Parse workflow YAML
-        run: >-
-          ruby -e "require 'yaml'; YAML.load_file('../.github/workflows/sdk-ci.yml');
-          puts 'workflow YAML valid'"
+        run: |
+          ruby <<'RUBY'
+          require 'yaml'
+          Dir['../.github/workflows/*.{yml,yaml}'].sort.each do |workflow|
+            YAML.load_file(workflow)
+            puts "workflow YAML valid: #{workflow}"
+          end
+          RUBY
 
   typescript-test:
     name: TypeScript / Node ${{ matrix.node }} / ${{ matrix.os }}

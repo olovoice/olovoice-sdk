@@ -1,20 +1,15 @@
-# olovoice — TypeScript/JavaScript SDK
+# OloVoice — TypeScript/JavaScript SDK
 
-Official SDK for the [olovoice Public API](https://docs.olovoice.ai). Zero dependencies, fully typed, and requires Node 22+ with its built-in `fetch`.
+Official SDK for the [OloVoice Public API](https://docs.olovoice.ai). Zero dependencies, fully typed, and requires Node 22+ with its built-in `fetch`.
 
-## Local pre-release install
+## Install
 
 ```bash
-cd /absolute/path/to/voiceSaas/sdk/typescript
-npm install
-npm run build
-npm pack
-
-# In your consumer project, install the generated tarball:
-npm install /absolute/path/to/voiceSaas/sdk/typescript/olovoice-0.1.0.tgz
+npm install olovoice@0.1.0
 ```
 
-This SDK is currently pre-release. The public npm package name is not yet reserved/published, so do not rely on a registry install until an official release is announced.
+This SDK is a public beta. Interfaces may evolve before 1.0, so pin and test an
+exact SDK version for production use.
 
 ## Quick start
 

@@ -5,8 +5,9 @@ build-backend = "hatchling.build"
 [project]
 name = "olovoice"
 dynamic = ["version"]
-description = "Official Python SDK for the olovoice Public API — AI voice agents, outbound calls, web calls, call logs, and metrics."
+description = "Official Python SDK for the OloVoice Public API — AI voice agents, outbound calls, web calls, call logs, and metrics."
 readme = "README.md"
+authors = [{ name = "OloVoice" }]
 license = "MIT"
 license-files = ["LICENSE"]
 requires-python = ">=3.11"
@@ -28,8 +29,9 @@ classifiers = [
 ]
 
 [project.urls]
+Homepage = "https://olovoice.ai"
 Documentation = "https://docs.olovoice.ai"
-Source = "https://github.com/olovoice/olovoice-sdk"
+Repository = "https://github.com/olovoice/olovoice-sdk"
 Issues = "https://github.com/olovoice/olovoice-sdk/issues"
 Changelog = "https://github.com/olovoice/olovoice-sdk/releases"
 
