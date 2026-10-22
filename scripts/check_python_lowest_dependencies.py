@@ -17,10 +17,12 @@ from typing import Any
 SDK_ROOT = Path(__file__).resolve().parents[1]
 PROJECT_ROOT = SDK_ROOT / "python"
 EXPECTED_DECLARATIONS = {
+    "certifi": "certifi>=2026.10.19",
     "httpcore": "httpcore>=1.0.9,<2",
     "httpx": "httpx>=0.28.1,<1",
 }
 EXPECTED_LOWEST_VERSIONS = {
+    "certifi": "2026.10.19",
     "h11": "0.16.0",
     "httpcore": "1.0.9",
     "httpx": "0.28.1",
@@ -47,7 +49,7 @@ parser.add_argument(
 parser.add_argument(
     "--uv",
     default="uv",
-    help="Path to the reviewed uv executable (CI pins uv 0.12.3).",
+    help="Path to the reviewed uv executable (CI pins uv 0.13.4).",
 )
 args = parser.parse_args()
 
@@ -98,7 +100,7 @@ import sysconfig
 print(json.dumps({
     "versions": {
         name: importlib.metadata.version(name)
-        for name in ("h11", "httpcore", "httpx")
+        for name in ("certifi", "h11", "httpcore", "httpx")
     },
     "paths": sorted({
         sysconfig.get_paths()["purelib"],
@@ -129,5 +131,5 @@ print(json.dumps({
 
 print(
     "Lowest supported dependency gate passed: "
-    "httpx==0.28.1, httpcore==1.0.9, h11==0.16.0."
+    "certifi==2026.10.19, httpx==0.28.1, httpcore==1.0.9, h11==0.16.0."
 )
