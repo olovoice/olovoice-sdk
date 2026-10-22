@@ -68,8 +68,10 @@ cd ..
 
 The TypeScript build uses Node scripts rather than POSIX-only shell commands,
 so the declared Node 22 baseline can be tested on macOS, Linux, and Windows.
-Python development and release commands use uv 0.12.3 with the committed,
+Python development and release commands use uv 0.13.4 with the committed,
 hash-bearing `uv.lock`; `--frozen` prevents dependency re-resolution.
+The lock pins pip 26.2.2 and certifi 2026.10.19, and the SDK requires
+certifi 2026.10.19 or newer for consumers as well.
 
 ## Release artifact checks
 
@@ -117,11 +119,11 @@ verified `SHA256SUMS` manifest.
   `devDependency` installed only through `npm ci`; release checks never fetch an
   uncommitted `npx` package. CI also verifies registry signatures and available
   attestations with `npm audit signatures`.
-- Python CI installs wheels from the hashed `uv.lock` with uv 0.12.3,
+- Python CI installs wheels from the hashed `uv.lock` with uv 0.13.4,
   `--frozen`, and `--no-build`.
   It audits that installed locked environment with pip-audit 2.10.1.
-  A separate lowest-supported consumer gate installs `httpx==0.28.1`,
-  `httpcore==1.0.9`, and `h11==0.16.0` from wheels and audits that environment;
+  A separate lowest-supported consumer gate installs `certifi==2026.10.19`,
+  `httpx==0.28.1`, `httpcore==1.0.9`, and `h11==0.16.0` from wheels and audits that environment;
   Python artifacts cannot build until the Python test matrix, including this
   floor check, succeeds.
   The artifact build runs `python -m build --no-isolation` against exact locked

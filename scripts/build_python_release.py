@@ -105,13 +105,14 @@ for raw_requirement in wheel_metadata.get_all("Requires-Dist", []):
     if ";" in raw_requirement:
         continue
     normalized = raw_requirement.replace(" ", "").replace("(", "").replace(")", "")
-    for dependency_name in ("httpcore", "httpx"):
+    for dependency_name in ("certifi", "httpcore", "httpx"):
         if normalized.startswith(dependency_name):
             runtime_requirements[dependency_name] = set(
                 normalized[len(dependency_name) :].split(",")
             )
 
 expected_runtime_requirements = {
+    "certifi": {">=2026.10.19"},
     "httpcore": {">=1.0.9", "<2"},
     "httpx": {">=0.28.1", "<1"},
 }
